@@ -1,0 +1,31 @@
+from app.api.routes import (
+    ai_document_summarizer,
+    auth,
+    chat,
+    dashboard,
+    departments,
+    documents,
+    email_helper,
+    folders,
+    license,
+    personal_notes,
+    settings,
+    tags,
+    users,
+)
+
+__all__ = [
+    'auth',
+    'license',
+    'users',
+    'tags',
+    'departments',
+    'folders',
+    'documents',
+    'ai_document_summarizer',
+    'chat',
+    'email_helper',
+    'personal_notes',
+    'dashboard',
+    'settings',
+]

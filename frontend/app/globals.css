@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top right, rgba(63, 95, 220, 0.08), transparent 35%),
+    radial-gradient(circle at bottom left, rgba(15, 23, 42, 0.04), transparent 40%),
+    #f8fafc;
+  color: #101828;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.kb-markdown {
+  line-height: 1.55;
+}
+
+.kb-markdown > :first-child {
+  margin-top: 0;
+}
+
+.kb-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.kb-markdown h2 {
+  margin: 0.85rem 0 0.35rem;
+  font-size: 0.98rem;
+  line-height: 1.3;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.kb-markdown p {
+  margin: 0.45rem 0;
+}
+
+.kb-markdown ul,
+.kb-markdown ol {
+  margin: 0.45rem 0 0.45rem 1.2rem;
+}
+
+.kb-markdown li {
+  margin: 0.2rem 0;
+}
+
+.kb-markdown code {
+  border-radius: 0.35rem;
+  background: #e2e8f0;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.84em;
+}
+
+.kb-markdown pre {
+  margin: 0.55rem 0;
+  overflow: auto;
+  border-radius: 0.8rem;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  padding: 0.7rem;
+}
+
+.kb-markdown pre code {
+  background: transparent;
+  padding: 0;
+}

@@ -1,0 +1,8 @@
+.env
+**/__pycache__/
+*.pyc
+node_modules/
+.next/
+.pytest_cache/
+.DS_Store
+external/kbai-license-server/
