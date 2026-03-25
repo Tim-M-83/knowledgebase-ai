@@ -16,6 +16,8 @@ class LicenseStatusOut(BaseModel):
     remote_active_activation_count: int | None = None
     remote_total_activation_count: int | None = None
     activation_limit: int | None = None
+    billing_email: str | None = None
+    billing_email_source: str | None = None
 
 
 class LicenseUrlOut(BaseModel):
@@ -24,3 +26,7 @@ class LicenseUrlOut(BaseModel):
 
 class LicenseActivateIn(BaseModel):
     license_key: str | None = None
+
+
+class LicenseBillingEmailIn(BaseModel):
+    billing_email: str | None = None

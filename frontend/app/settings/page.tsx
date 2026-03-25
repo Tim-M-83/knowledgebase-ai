@@ -83,6 +83,7 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [licenseKeyInput, setLicenseKeyInput] = useState('');
+  const [billingEmailInput, setBillingEmailInput] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
   const [showLicenseKey, setShowLicenseKey] = useState(false);
@@ -97,6 +98,7 @@ export default function SettingsPage() {
   const [validatingLicense, setValidatingLicense] = useState(false);
   const [deactivatingLicense, setDeactivatingLicense] = useState(false);
   const [resettingActivations, setResettingActivations] = useState(false);
+  const [savingBillingEmail, setSavingBillingEmail] = useState(false);
   const [exportingLogs, setExportingLogs] = useState(false);
 
   const canSaveProvider = currentRole === 'admin';
@@ -149,10 +151,41 @@ export default function SettingsPage() {
     if (detail.includes('License key does not match this workspace.')) {
       return `${prefix}: ${detail} This Polar key belongs to a different Workspace ID. To reuse an existing purchase after a reinstall, restore the original Workspace ID in .env as LICENSE_WORKSPACE_ID, rebuild the API, and then activate again. Otherwise start a new checkout for the Workspace ID shown below.`;
     }
+    if (detail.includes('demo/test domain')) {
+      return `${prefix}: ${detail}`;
+    }
+    if (detail.includes('No billing email is configured.')) {
+      return `${prefix}: ${detail}`;
+    }
     if (detail.includes('customer_email') && detail.includes('valid email address')) {
-      return `${prefix}: Polar rejected the billing email for this checkout. Use a real reachable admin email or set LICENSE_BILLING_EMAIL in .env, rebuild the API, and then try again.`;
+      return `${prefix}: Polar rejected the billing email for this checkout. Save a real reachable billing email below and then try again.`;
     }
     return `${prefix}: ${detail}`;
+  };
+
+  const isRejectedBillingEmail = (email: string | null | undefined) => {
+    const normalized = (email || '').trim().toLowerCase();
+    if (!normalized || !normalized.includes('@')) {
+      return false;
+    }
+
+    const domain = normalized.split('@').pop() || '';
+    return (
+      !domain.includes('.') ||
+      domain === 'example.com' ||
+      domain === 'example.org' ||
+      domain === 'example.net' ||
+      domain === 'localhost' ||
+      domain.endsWith('.local') ||
+      domain.endsWith('.test')
+    );
+  };
+
+  const billingEmailSourceLabel = (source: LicenseStatus['billing_email_source']) => {
+    if (source === 'saved') return 'saved billing email';
+    if (source === 'env') return '.env LICENSE_BILLING_EMAIL';
+    if (source === 'admin') return 'current admin login email';
+    return 'not configured';
   };
 
   const copyWorkspaceId = async () => {
@@ -207,10 +240,33 @@ export default function SettingsPage() {
     load().catch(() => undefined);
   }, []);
 
+  useEffect(() => {
+    setBillingEmailInput(licenseStatus?.billing_email || '');
+  }, [licenseStatus?.billing_email]);
+
   const availableProviders = useMemo(
     () => providerSettings?.available_providers ?? (['openai', 'ollama'] as ProviderRuntime[]),
     [providerSettings]
   );
+
+  const billingEmailWarning = useMemo(() => {
+    if (!licenseStatus) {
+      return null;
+    }
+
+    const effectiveEmail = (licenseStatus.billing_email || '').trim();
+    if (!effectiveEmail) {
+      return 'No billing email is configured yet. Save a real reachable billing email below before starting checkout.';
+    }
+
+    if (isRejectedBillingEmail(effectiveEmail)) {
+      return `The current billing email from ${billingEmailSourceLabel(licenseStatus.billing_email_source)} is a demo/test or otherwise invalid checkout address, and Polar will reject it. Save a real reachable billing email below first.`;
+    }
+
+    return null;
+  }, [licenseStatus]);
+
+  const checkoutBlockedByBillingEmail = Boolean(billingEmailWarning);
 
   const testOpenAI = async () => {
     setTestingOpenAI(true);
@@ -367,9 +423,46 @@ export default function SettingsPage() {
     }
   };
 
+  const saveBillingEmail = async () => {
+    if (!canSaveProvider) {
+      setLicenseFeedback({ tone: 'error', text: 'Only admins can save the billing email.' });
+      return;
+    }
+
+    setSavingBillingEmail(true);
+    setLicenseFeedback(null);
+    try {
+      const updated = await api.put<LicenseStatus>(
+        '/license/billing-email',
+        { billing_email: billingEmailInput.trim() || '' },
+        true
+      );
+      setLicenseStatus(updated);
+      setLicenseFeedback({
+        tone: 'success',
+        text: billingEmailInput.trim()
+          ? 'Billing email saved. Polar checkout and activation will use this address.'
+          : updated.billing_email
+            ? `Saved billing email cleared. The app will now fall back to ${billingEmailSourceLabel(updated.billing_email_source)}.`
+            : 'Saved billing email cleared.',
+      });
+    } catch (error) {
+      setLicenseFeedback({
+        tone: 'error',
+        text: formatLicenseActionError('Failed to save billing email', error as Error),
+      });
+    } finally {
+      setSavingBillingEmail(false);
+    }
+  };
+
   const startCheckout = async () => {
     if (!canSaveProvider) {
       setLicenseFeedback({ tone: 'error', text: 'Only admins can start checkout.' });
+      return;
+    }
+    if (checkoutBlockedByBillingEmail) {
+      setLicenseFeedback({ tone: 'error', text: billingEmailWarning || 'Save a valid billing email first.' });
       return;
     }
     setStartingCheckout(true);
@@ -387,6 +480,10 @@ export default function SettingsPage() {
   const activateLicense = async () => {
     if (!canSaveProvider) {
       setLicenseFeedback({ tone: 'error', text: 'Only admins can activate this installation.' });
+      return;
+    }
+    if (checkoutBlockedByBillingEmail) {
+      setLicenseFeedback({ tone: 'error', text: billingEmailWarning || 'Save a valid billing email first.' });
       return;
     }
     const normalizedLicenseKey = licenseKeyInput.trim();
@@ -795,6 +892,8 @@ export default function SettingsPage() {
               {licenseStatus.remote_total_activation_count !== undefined && licenseStatus.remote_total_activation_count !== null ? (
                 <p>Total activations recorded: {licenseStatus.remote_total_activation_count}</p>
               ) : null}
+              <p>Billing email: {licenseStatus.billing_email || 'Not configured yet'}</p>
+              <p>Billing email source: {billingEmailSourceLabel(licenseStatus.billing_email_source)}</p>
               <p>License server: {licenseStatus.license_server_base_url}</p>
               {licenseStatus.current_period_end ? <p>Current period end: {licenseStatus.current_period_end}</p> : null}
               {licenseStatus.last_validated_at ? <p>Last validation: {licenseStatus.last_validated_at}</p> : null}
@@ -813,6 +912,33 @@ export default function SettingsPage() {
                 keys continue to work only for the workspace they were originally issued for.
               </p>
             </div>
+            <div className='mt-3 space-y-2'>
+              <label className='text-xs font-medium text-slate-600'>Billing Email</label>
+              <Input
+                type='email'
+                value={billingEmailInput}
+                onChange={(e) => setBillingEmailInput(e.target.value)}
+                placeholder='billing@your-company.com'
+              />
+              <p className='text-[11px] text-slate-500'>
+                Used for Polar checkout and activation. Use a real reachable address. Demo domains like{' '}
+                <code>example.com</code> will be rejected.
+              </p>
+              <p className='text-[11px] text-slate-500'>
+                Your admin login email can be different. Subscription checkout and the Polar customer portal use the
+                billing email shown here.
+              </p>
+              <div className='flex flex-wrap gap-2'>
+                <Button variant='secondary' onClick={saveBillingEmail} disabled={savingBillingEmail}>
+                  {savingBillingEmail ? 'Saving billing email...' : 'Save Billing Email'}
+                </Button>
+              </div>
+            </div>
+            {billingEmailWarning ? (
+              <div className='mt-3'>
+                <FeedbackBanner feedback={{ tone: 'error', text: billingEmailWarning }} />
+              </div>
+            ) : null}
             {licenseFeedback ? (
               <div className='mt-3'>
                 <FeedbackBanner feedback={licenseFeedback} />
@@ -847,7 +973,7 @@ export default function SettingsPage() {
             </div>
             <div className='mt-3 space-y-2'>
               <label className='text-xs font-medium text-slate-600'>Installation Activation</label>
-              <Button variant='secondary' onClick={activateLicense} disabled={activatingLicense}>
+              <Button variant='secondary' onClick={activateLicense} disabled={activatingLicense || checkoutBlockedByBillingEmail}>
                 {activatingLicense ? 'Activating...' : 'Activate This Installation'}
               </Button>
               <p className='text-[11px] text-slate-500'>
@@ -859,7 +985,7 @@ export default function SettingsPage() {
               </p>
             </div>
             <div className='mt-3 flex flex-wrap gap-2'>
-              <Button variant='secondary' onClick={startCheckout} disabled={startingCheckout}>
+              <Button variant='secondary' onClick={startCheckout} disabled={startingCheckout || checkoutBlockedByBillingEmail}>
                 {startingCheckout ? 'Redirecting...' : 'Buy / Renew Subscription'}
               </Button>
               <a
@@ -896,8 +1022,8 @@ export default function SettingsPage() {
             </div>
             <p className='mt-2 text-[11px] text-slate-500'>
               Use <span className='font-medium'>Access My Purchases</span> to open the secure Polar customer portal in
-              a new tab. There you can sign in with the email address used for your purchase or subscription, review
-              your billing history, manage your subscription, or cancel it.
+              a new tab. There you can sign in with this billing email, review your billing history, manage your
+              subscription, or cancel it.
             </p>
           </div>
         ) : null}

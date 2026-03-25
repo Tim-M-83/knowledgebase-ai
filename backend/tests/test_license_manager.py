@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from app.services import license_manager
 from app.services.license_server import LicenseServerError, RemoteActivateResponse, RemoteValidateResponse
 from app.services.license_state import LicenseSnapshot
@@ -31,7 +33,11 @@ def test_activate_current_installation_stores_and_uses_pasted_license_key(monkey
     monkeypatch.setattr(license_manager, 'ensure_workspace_id', lambda _db: 'workspace-1')
     monkeypatch.setattr(license_manager, 'ensure_machine_fingerprint', lambda _db: 'machine-1')
     monkeypatch.setattr(license_manager, '_company_name', lambda: 'KnowledgeBase AI')
-    monkeypatch.setattr(license_manager, '_billing_email', lambda _email=None: 'billing@example.com')
+    monkeypatch.setattr(
+        license_manager,
+        'get_effective_billing_email',
+        lambda _db, fallback_email=None, validate_for_checkout=False: ('billing@automateki.de', 'saved'),
+    )
     monkeypatch.setattr(license_manager, '_hostname', lambda: 'host-1')
     monkeypatch.setattr(
         license_manager,
@@ -65,6 +71,42 @@ def test_activate_current_installation_stores_and_uses_pasted_license_key(monkey
     assert captured['license_key'] == 'POLAR-REAL-KEY-001'
     assert snapshot.license_active is True
     assert snapshot.license_status == 'active'
+
+
+def test_get_effective_billing_email_prefers_saved_override(monkeypatch):
+    monkeypatch.setattr(license_manager.settings, 'license_billing_email', 'env@automateki.de', raising=False)
+    monkeypatch.setattr(license_manager, 'get_runtime_billing_email', lambda _db: 'saved@automateki.de')
+
+    email, source = license_manager.get_effective_billing_email(db=object(), fallback_email='admin@automateki.de')
+
+    assert email == 'saved@automateki.de'
+    assert source == 'saved'
+
+
+def test_start_checkout_rejects_demo_admin_email_without_override(monkeypatch):
+    monkeypatch.setattr(license_manager.settings, 'license_billing_email', '', raising=False)
+    monkeypatch.setattr(license_manager, 'ensure_workspace_id', lambda _db: 'workspace-1')
+    monkeypatch.setattr(license_manager, 'get_runtime_billing_email', lambda _db: None)
+    monkeypatch.setattr(license_manager, 'create_remote_checkout_url', lambda **_kwargs: 'unexpected')
+
+    with pytest.raises(ValueError, match='demo/test domain'):
+        license_manager.start_checkout(db=object(), email='admin@example.com')
+
+
+def test_update_runtime_billing_email_clears_saved_override(monkeypatch):
+    captured: dict[str, bool] = {}
+
+    monkeypatch.setattr(
+        license_manager,
+        'clear_runtime_billing_email',
+        lambda _db: captured.__setitem__('cleared', True),
+    )
+
+    email, source = license_manager.update_runtime_billing_email(db=object(), billing_email='  ')
+
+    assert captured['cleared'] is True
+    assert email is None
+    assert source == 'none'
 
 
 def test_validate_current_license_retries_once_on_activation_not_found(monkeypatch):

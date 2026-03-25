@@ -28,6 +28,8 @@ export type LicenseStatus = {
   remote_active_activation_count?: number | null;
   remote_total_activation_count?: number | null;
   activation_limit?: number | null;
+  billing_email?: string | null;
+  billing_email_source?: 'saved' | 'env' | 'admin' | 'none' | null;
 };
 
 export type PersonalNote = {

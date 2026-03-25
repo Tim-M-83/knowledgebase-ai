@@ -468,6 +468,7 @@ Notes:
 - The local app no longer stores Polar credentials or receives Polar webhooks directly.
 - The local app stores the pasted Polar license key encrypted after activation and reuses it for later validation and recovery.
 - `LICENSE_WORKSPACE_ID` is the restore anchor for the licensed workspace. The one-line installer now generates and stores one automatically in `.env`.
+- `LICENSE_BILLING_EMAIL` is now only an optional operator fallback. Admins can save or change the real billing email directly in `Settings > License & Subscription`.
 - On a fresh install, normal protected app usage stays blocked until an admin completes checkout, pastes the Polar license key, and activates the installation.
 
 ### 16.2 Rebuild services after env changes
@@ -479,6 +480,7 @@ docker compose up -d --build api frontend
 1. Login as admin.
 2. Open `Settings > Runtime Provider`.
 3. In the `License & Subscription` card:
+   - Save a real reachable `Billing Email` there if the current admin login email is only a demo/test address.
    - Click `Buy / Renew Subscription` to open hosted checkout on `https://app.automateki.de`.
    - Complete checkout there.
    - Copy the Polar-generated license key from the hosted success page.
@@ -502,7 +504,7 @@ Important:
 - Reinstalling with a different `LICENSE_WORKSPACE_ID` intentionally creates a new workspace identity.
 - In that case, an old Polar key will fail with `License key does not match this workspace.`
 - The correct recovery is either restoring the old Workspace ID or starting a new checkout for the new workspace.
-- If Polar rejects checkout because the billing email is invalid, use a real reachable admin email or set `LICENSE_BILLING_EMAIL` in `.env`, then rebuild the API before retrying checkout.
+- If checkout is blocked because the billing email is invalid, save a real reachable `Billing Email` directly in `Settings > License & Subscription` and retry. Use `LICENSE_BILLING_EMAIL` in `.env` only as an operator fallback.
 
 ### 16.4 Enforcement behavior
 - When license enforcement is enabled and the local activation is inactive, protected app routes are blocked.

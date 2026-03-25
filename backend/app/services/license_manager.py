@@ -3,6 +3,9 @@ from __future__ import annotations
 import logging
 import socket
 from dataclasses import replace
+from typing import Literal
+
+from email_validator import EmailNotValidError, validate_email
 
 from sqlalchemy.orm import Session
 
@@ -20,16 +23,19 @@ from app.services.license_server import (
 from app.services.license_state import (
     LicenseSnapshot,
     clear_local_license_state,
+    clear_runtime_billing_email,
     ensure_machine_fingerprint,
     ensure_workspace_id,
     get_instance_id,
     get_license_enabled,
     get_license_snapshot,
+    get_runtime_billing_email,
     get_stored_license_key,
     has_stored_license_key,
     persist_activation,
     persist_validation_result,
     record_server_unreachable,
+    store_runtime_billing_email,
     store_license_key,
     should_revalidate,
 )
@@ -37,6 +43,14 @@ from app.services.license_state import (
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
+
+DEMO_BILLING_EMAIL_DOMAINS = {
+    'example.com',
+    'example.org',
+    'example.net',
+    'localhost',
+}
+BillingEmailSource = Literal['saved', 'env', 'admin', 'none']
 
 
 def _hostname() -> str | None:
@@ -50,13 +64,82 @@ def _company_name() -> str:
     return settings.license_company_name.strip() or settings.app_name
 
 
-def _billing_email(fallback_email: str | None = None) -> str:
-    configured = settings.license_billing_email.strip()
-    if configured:
-        return configured
-    if fallback_email and fallback_email.strip():
-        return fallback_email.strip()
-    raise ValueError('LICENSE_BILLING_EMAIL is not configured.')
+def _normalize_billing_email(value: str | None) -> str | None:
+    normalized = (value or '').strip()
+    return normalized or None
+
+
+def _validate_runtime_billing_email(email: str) -> str:
+    normalized = email.strip()
+    if not normalized:
+        raise ValueError(
+            'No billing email is configured. Save a real billing email in License & Subscription before continuing.'
+        )
+
+    try:
+        validated = validate_email(normalized, check_deliverability=False)
+    except EmailNotValidError as exc:
+        raise ValueError(
+            'Billing email is invalid. Save a real reachable billing email in License & Subscription before continuing.'
+        ) from exc
+
+    canonical = validated.normalized
+    domain = canonical.rsplit('@', 1)[-1].strip().lower()
+    if (
+        domain in DEMO_BILLING_EMAIL_DOMAINS
+        or domain.endswith('.local')
+        or domain.endswith('.test')
+    ):
+        raise ValueError(
+            'Billing email uses a demo/test domain and cannot be used for Polar checkout or activation. '
+            'Save a real reachable billing email in License & Subscription before continuing.'
+        )
+    return canonical
+
+
+def get_effective_billing_email(
+    db: Session,
+    *,
+    fallback_email: str | None = None,
+    validate_for_checkout: bool = False,
+) -> tuple[str | None, BillingEmailSource]:
+    runtime_email = _normalize_billing_email(get_runtime_billing_email(db))
+    if runtime_email:
+        return (
+            _validate_runtime_billing_email(runtime_email) if validate_for_checkout else runtime_email,
+            'saved',
+        )
+
+    configured_email = _normalize_billing_email(settings.license_billing_email)
+    if configured_email:
+        return (
+            _validate_runtime_billing_email(configured_email) if validate_for_checkout else configured_email,
+            'env',
+        )
+
+    admin_email = _normalize_billing_email(fallback_email)
+    if admin_email:
+        return (
+            _validate_runtime_billing_email(admin_email) if validate_for_checkout else admin_email,
+            'admin',
+        )
+
+    if validate_for_checkout:
+        raise ValueError(
+            'No billing email is configured. Save a real billing email in License & Subscription before continuing.'
+        )
+    return None, 'none'
+
+
+def update_runtime_billing_email(db: Session, billing_email: str | None) -> tuple[str | None, BillingEmailSource]:
+    normalized = _normalize_billing_email(billing_email)
+    if normalized is None:
+        clear_runtime_billing_email(db)
+        return None, 'none'
+
+    validated = _validate_runtime_billing_email(normalized)
+    store_runtime_billing_email(db, validated)
+    return validated, 'saved'
 
 
 def start_checkout(
@@ -66,11 +149,12 @@ def start_checkout(
     company_name: str | None = None,
 ) -> str:
     workspace_id = ensure_workspace_id(db)
+    billing_email, _ = get_effective_billing_email(db, fallback_email=email, validate_for_checkout=True)
     logger.info('License checkout requested workspace_id=%s', workspace_id)
     return create_remote_checkout_url(
         workspace_id=workspace_id,
         company_name=company_name or _company_name(),
-        email=_billing_email(email),
+        email=billing_email,
     )
 
 
@@ -127,10 +211,11 @@ def activate_current_installation(
     workspace_id = ensure_workspace_id(db)
     machine_fingerprint = ensure_machine_fingerprint(db)
     resolved_license_key = _resolve_license_key(db, license_key)
+    billing_email, _ = get_effective_billing_email(db, fallback_email=email, validate_for_checkout=True)
     response = activate_remote_license(
         workspace_id=workspace_id,
         company_name=_company_name(),
-        email=_billing_email(email),
+        email=billing_email,
         license_key=resolved_license_key,
         machine_fingerprint=machine_fingerprint,
         hostname=_hostname(),

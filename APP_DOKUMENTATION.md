@@ -402,7 +402,8 @@ All endpoints in this group enforce the global feature flag and return `403` whe
 ### 5.13 License
 | Method | Path | Access | Purpose |
 |---|---|---|---|
-| GET | `/license/status` | Authenticated | Get current local license state for the workspace installation. |
+| GET | `/license/status` | Authenticated | Get current local license state for the workspace installation, including the effective billing email and its source. |
+| PUT | `/license/billing-email` | Admin + CSRF | Save or clear the runtime billing email used for Polar checkout and activation. |
 | POST | `/license/checkout` | Admin + CSRF | Request hosted checkout URL from the external license server. |
 | POST | `/license/activate` | Admin + CSRF | Activate the current installation with a pasted Polar-generated `license_key`; the local app stores that key encrypted for later validation and recovery. |
 | POST | `/license/validate` | Admin + CSRF | Revalidate the stored local activation with the external license server using the locally stored encrypted license key. |
@@ -468,12 +469,12 @@ Configuration is loaded from `.env` (see `.env.example`).
 - `LICENSE_SERVER_ADMIN_TOKEN`: static Bearer JWT used only by the trusted local backend for `/billing/*` calls.
 - `LICENSE_WORKSPACE_ID`: stable workspace identifier used for checkout, sync, activation, and validation.
 - `LICENSE_COMPANY_NAME`: company/workspace name sent to the external license server.
-- `LICENSE_BILLING_EMAIL`: reachable billing email sent during checkout and activation.
+- `LICENSE_BILLING_EMAIL`: optional operator fallback for checkout/activation when no runtime billing email has been saved in Settings.
 - `LICENSE_ENFORCEMENT_ENABLED`: enable/disable hard blocking when the local installation license is inactive.
 - `LICENSE_VALIDATE_INTERVAL_HOURS`: how often the app should revalidate the cached activation with the external server.
 - `LICENSE_OFFLINE_GRACE_HOURS`: offline grace period after a successful validation if the license server is temporarily unreachable. Explicit inactive/invalid responses do not receive grace.
 
-Local runtime license state is persisted in `app_settings` (workspace ID, machine fingerprint, encrypted Polar license key, local instance ID, status, current period end, last validation/check timestamps, grace deadline, and last error).
+Local runtime license state is persisted in `app_settings` (workspace ID, machine fingerprint, runtime billing email, encrypted Polar license key, local instance ID, status, current period end, last validation/check timestamps, grace deadline, and last error).
 
 ## 7. Operations and Runtime Management
 ### 7.1 Start stack
@@ -623,7 +624,7 @@ docker compose up -d --build api frontend
 - In Settings, license actions show an inline success/error banner directly inside `License & Subscription` so activation and validation results are visible immediately.
 - If the workspace has already consumed all activation slots, use `Reset All Activations` in Settings, then retry `Activate This Installation`.
 - If activation fails with `License key does not match this workspace.`, the stored Polar key belongs to a different `LICENSE_WORKSPACE_ID`. Restore the original Workspace ID in `.env`, rebuild the API, and retry activation. Otherwise start a new checkout for the new workspace.
-- If checkout fails because Polar rejects the billing email, use a real reachable admin email or set `LICENSE_BILLING_EMAIL` in `.env`, rebuild the API, and then retry `Buy / Renew Subscription`.
+- If checkout is blocked because the billing email is invalid, save a real reachable `Billing Email` directly in `Settings > License & Subscription` and retry `Buy / Renew Subscription`. Use `LICENSE_BILLING_EMAIL` in `.env` only as an operator fallback.
 
 ## 9. Security Notes
 - JWT is cookie-based with configurable secure flag.

@@ -136,6 +136,7 @@ Notes:
 - Self-service account security in Settings (each authenticated user can update own email/password)
 - Automatic bootstrap admin on fresh installs with forced first-login credential change
 - External license-server monetization flow with hosted Polar checkout, pasted Polar license key activation, and local grace-period enforcement
+- Dedicated billing email flow in `License & Subscription` so Polar checkout does not depend on the admin login email
 - Strict RBAC checks server-side
 - Document upload + async ingestion (PDF/TXT/CSV)
 - Chunking with overlap + vector indexing (pgvector)
@@ -150,7 +151,7 @@ Notes:
 
 ## API Surface
 - Auth: `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`, `PUT /auth/me/credentials`
-- License: `GET /license/status`, `POST /license/checkout`, `POST /license/activate` (accepts pasted Polar `license_key`), `POST /license/validate`, `POST /license/deactivate`
+- License: `GET /license/status`, `PUT /license/billing-email`, `POST /license/checkout`, `POST /license/activate` (accepts pasted Polar `license_key`), `POST /license/validate`, `POST /license/deactivate`
 - Users: `GET/POST/PUT/DELETE /users`
 - Documents: `POST /documents/upload`, `GET /documents`, `GET /documents/{id}`, `PUT /documents/{id}/metadata`, `DELETE /documents/{id}`, `POST /documents/{id}/index`, `POST /documents/{id}/reingest`
 - Chat: `POST /chat/sessions`, `GET /chat/sessions`, `DELETE /chat/sessions`, `GET /chat/sessions/{id}`, `POST /chat/ask` (SSE), `POST /chat/feedback`

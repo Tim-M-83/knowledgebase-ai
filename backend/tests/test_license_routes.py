@@ -5,7 +5,7 @@ from fastapi import HTTPException
 
 from app.api.routes import license
 from app.models.user import Role
-from app.schemas.license import LicenseActivateIn
+from app.schemas.license import LicenseActivateIn, LicenseBillingEmailIn
 from app.services.license_server import LicenseServerError
 from app.services.license_state import LicenseSnapshot
 
@@ -51,6 +51,11 @@ def test_activate_returns_updated_license_status(monkeypatch):
     monkeypatch.setattr(license, 'validate_csrf', lambda _request: None)
     monkeypatch.setattr(
         license,
+        'get_effective_billing_email',
+        lambda _db, fallback_email=None: ('billing@automateki.de', 'saved'),
+    )
+    monkeypatch.setattr(
+        license,
         'activate_current_installation',
         lambda _db, license_key=None, email=None: _snapshot(active=True, status='active'),
     )
@@ -88,6 +93,11 @@ def test_validate_translates_license_server_errors(monkeypatch):
 def test_status_returns_remote_activation_usage(monkeypatch):
     monkeypatch.setattr(
         license,
+        'get_effective_billing_email',
+        lambda _db, fallback_email=None: ('billing@automateki.de', 'saved'),
+    )
+    monkeypatch.setattr(
+        license,
         'get_license_status_view',
         lambda _db: LicenseSnapshot(
             license_enabled=True,
@@ -108,15 +118,25 @@ def test_status_returns_remote_activation_usage(monkeypatch):
         ),
     )
 
-    out = license.get_license_status(db=object(), _=SimpleNamespace(id=1))
+    out = license.get_license_status(
+        db=object(),
+        current_user=SimpleNamespace(id=1, role=Role.admin, email='admin@automateki.de'),
+    )
 
     assert out.remote_active_activation_count == 1
     assert out.remote_total_activation_count == 1
     assert out.activation_limit == 3
+    assert out.billing_email == 'billing@automateki.de'
+    assert out.billing_email_source == 'saved'
 
 
 def test_reset_activations_returns_updated_license_status(monkeypatch):
     monkeypatch.setattr(license, 'validate_csrf', lambda _request: None)
+    monkeypatch.setattr(
+        license,
+        'get_effective_billing_email',
+        lambda _db, fallback_email=None: ('billing@automateki.de', 'saved'),
+    )
     monkeypatch.setattr(
         license,
         'reset_current_activations',
@@ -142,9 +162,29 @@ def test_reset_activations_returns_updated_license_status(monkeypatch):
     out = license.reset_activations(
         request=object(),
         db=object(),
-        _=SimpleNamespace(id=1, role=Role.admin),
+        current_user=SimpleNamespace(id=1, role=Role.admin, email='admin@automateki.de'),
     )
 
     assert out.license_status == 'activation_required'
     assert out.remote_active_activation_count == 0
     assert out.activation_limit == 3
+
+
+def test_update_billing_email_returns_updated_license_status(monkeypatch):
+    flags = {'csrf': False}
+
+    monkeypatch.setattr(license, 'validate_csrf', lambda _request: flags.__setitem__('csrf', True))
+    monkeypatch.setattr(license, 'update_runtime_billing_email', lambda _db, billing_email=None: ('billing@automateki.de', 'saved'))
+    monkeypatch.setattr(license, 'get_effective_billing_email', lambda _db, fallback_email=None: ('billing@automateki.de', 'saved'))
+    monkeypatch.setattr(license, 'get_license_status_view', lambda _db: _snapshot(active=False, status='activation_required'))
+
+    out = license.update_billing_email(
+        payload=LicenseBillingEmailIn(billing_email='billing@automateki.de'),
+        request=object(),
+        db=object(),
+        current_user=SimpleNamespace(id=1, role=Role.admin, email='admin@example.com'),
+    )
+
+    assert flags['csrf'] is True
+    assert out.billing_email == 'billing@automateki.de'
+    assert out.billing_email_source == 'saved'

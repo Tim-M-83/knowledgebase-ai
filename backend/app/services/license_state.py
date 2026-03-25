@@ -15,6 +15,7 @@ settings = get_settings()
 
 KEY_LICENSE_WORKSPACE_ID = 'license_workspace_id'
 KEY_LICENSE_MACHINE_FINGERPRINT = 'license_machine_fingerprint'
+KEY_LICENSE_BILLING_EMAIL_RUNTIME = 'license_billing_email_runtime'
 KEY_LICENSE_KEY_ENCRYPTED = 'license_key_encrypted'
 KEY_LICENSE_INSTANCE_ID = 'license_instance_id'
 KEY_LICENSE_STATUS = 'license_status'
@@ -132,6 +133,23 @@ def ensure_machine_fingerprint(db: Session) -> str:
     _upsert(db, KEY_LICENSE_MACHINE_FINGERPRINT, generated)
     db.commit()
     return generated
+
+
+def get_runtime_billing_email(db: Session) -> str | None:
+    return _get_setting_value(db, KEY_LICENSE_BILLING_EMAIL_RUNTIME)
+
+
+def store_runtime_billing_email(db: Session, billing_email: str) -> None:
+    normalized = billing_email.strip()
+    if not normalized:
+        raise ValueError('billing_email must not be empty')
+    _upsert(db, KEY_LICENSE_BILLING_EMAIL_RUNTIME, normalized)
+    db.commit()
+
+
+def clear_runtime_billing_email(db: Session) -> None:
+    _set_or_delete(db, KEY_LICENSE_BILLING_EMAIL_RUNTIME, None)
+    db.commit()
 
 
 def get_instance_id(db: Session) -> str | None:
