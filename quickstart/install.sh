@@ -6,6 +6,7 @@ INSTALL_DIR="${INSTALL_DIR:-knowledgebase-ai}"
 ARCHIVE_URL="https://github.com/Tim-M-83/knowledgebase-ai/releases/latest/download/knowledgebase-ai.tar.gz"
 LICENSE_SERVER_ADMIN_TOKEN="__LICENSE_SERVER_ADMIN_TOKEN__"
 INSTALLER_RENDER_MARKER="__INSTALLER_RENDERED__"
+TMP_DIR=''
 
 info() {
   printf '\n[INFO] %s\n' "$1"
@@ -18,6 +19,12 @@ warn() {
 fail() {
   printf '\n[ERROR] %s\n' "$1" >&2
   exit 1
+}
+
+cleanup_tmp_dir() {
+  if [ -n "${TMP_DIR:-}" ] && [ -d "${TMP_DIR:-}" ]; then
+    rm -rf "$TMP_DIR"
+  fi
 }
 
 need_cmd() {
@@ -156,7 +163,6 @@ extract_bootstrap_credentials() {
 }
 
 main() {
-  local tmp_dir
   local jwt_secret
   local secrets_key
   local creds
@@ -172,11 +178,11 @@ main() {
 
   [ ! -e "$INSTALL_DIR" ] || fail "Target directory already exists: $INSTALL_DIR"
 
-  tmp_dir="$(mktemp -d)"
-  trap 'rm -rf "$tmp_dir"' EXIT INT TERM
+  TMP_DIR="$(mktemp -d)"
+  trap cleanup_tmp_dir EXIT INT TERM
 
-  download_release "$tmp_dir"
-  mv "$tmp_dir/knowledgebase-ai" "$INSTALL_DIR"
+  download_release "$TMP_DIR"
+  mv "$TMP_DIR/knowledgebase-ai" "$INSTALL_DIR"
 
   info "Preparing environment configuration"
   cp "$INSTALL_DIR/.env.example" "$INSTALL_DIR/.env"
@@ -214,13 +220,13 @@ main() {
 
   printf '\n%s\n' '========================================================================'
   printf '%s installed successfully.\n' "$APP_NAME"
-  printf 'Open: http://localhost:3000\n'
+  printf 'Open: http://localhost:3000/login\n'
   if [ -n "$bootstrap_email" ] && [ -n "$bootstrap_password" ]; then
     printf 'Bootstrap email: %s\n' "$bootstrap_email"
     printf 'Bootstrap password: %s\n' "$bootstrap_password"
   fi
   printf 'Next steps:\n'
-  printf '1. Sign in and complete the Initial Security Setup.\n'
+  printf '1. Open the login page and sign in with the bootstrap credentials above.\n'
   printf '2. Open Settings > License & Subscription.\n'
   printf '3. Click Buy / Renew Subscription, start the 7-day free trial or purchase, then activate the installation.\n'
   printf '4. Add your OpenAI API key later in Settings if you want to use OpenAI immediately.\n'

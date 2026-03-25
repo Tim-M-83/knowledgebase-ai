@@ -1,6 +1,16 @@
 import { getCookie } from '@/lib/utils';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+export const AUTH_UNAUTHORIZED_EVENT = 'kb-auth-unauthorized';
+
+export class UnauthorizedError extends Error {
+  status = 401;
+
+  constructor(message = 'Unauthorized') {
+    super(message);
+    this.name = 'UnauthorizedError';
+  }
+}
 
 type RequestOptions = RequestInit & { csrf?: boolean };
 
@@ -27,13 +37,23 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   if (!response.ok) {
     const raw = await response.text();
+    let detail = raw || `Request failed: ${response.status}`;
+
     try {
       const parsed = JSON.parse(raw);
-      const detail = typeof parsed?.detail === 'string' ? parsed.detail : raw;
-      throw new Error(detail || `Request failed: ${response.status}`);
+      detail = typeof parsed?.detail === 'string' ? parsed.detail : detail;
     } catch {
-      throw new Error(raw || `Request failed: ${response.status}`);
+      // Fall back to the raw response text below.
     }
+
+    if (response.status === 401) {
+      if (typeof window !== 'undefined' && path !== '/auth/login') {
+        window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT));
+      }
+      throw new UnauthorizedError(detail);
+    }
+
+    throw new Error(detail);
   }
 
   const contentType = response.headers.get('content-type');

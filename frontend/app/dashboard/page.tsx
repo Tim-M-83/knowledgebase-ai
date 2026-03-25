@@ -9,7 +9,7 @@ import { TopTagsChart } from '@/components/charts/TopTagsChart';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { api } from '@/lib/api';
+import { UnauthorizedError, api } from '@/lib/api';
 import { getCurrentUser } from '@/lib/auth';
 import { ChartsResponse, ClearGapsResponse, GapItem, KPIResponse, Role } from '@/lib/types';
 
@@ -19,6 +19,8 @@ export default function DashboardPage() {
   const [gaps, setGaps] = useState<GapItem[]>([]);
   const [role, setRole] = useState<Role | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadDashboard = async () => {
     const [kpiData, chartData, gapData] = await Promise.all([
@@ -32,7 +34,14 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    loadDashboard().catch(() => undefined);
+    loadDashboard()
+      .catch((error) => {
+        if (error instanceof UnauthorizedError) {
+          return;
+        }
+        setLoadError((error as Error).message || 'Failed to load dashboard.');
+      })
+      .finally(() => setLoading(false));
     getCurrentUser().then((user) => setRole(user?.role || null)).catch(() => undefined);
   }, []);
 
@@ -48,8 +57,21 @@ export default function DashboardPage() {
     }
   };
 
-  if (!kpis || !charts) {
+  if (loading) {
     return <Skeleton className='h-96' />;
+  }
+
+  if (loadError) {
+    return (
+      <Card>
+        <h2 className='mb-2 text-sm font-semibold'>Dashboard unavailable</h2>
+        <p className='text-sm text-red-700'>{loadError}</p>
+      </Card>
+    );
+  }
+
+  if (!kpis || !charts) {
+    return null;
   }
 
   return (

@@ -205,13 +205,13 @@ function Main {
         Write-Host ''
         Write-Host '========================================================================'
         Write-Host "$AppName installed successfully."
-        Write-Host 'Open: http://localhost:3000'
+        Write-Host 'Open: http://localhost:3000/login'
         if ($bootstrap) {
             Write-Host "Bootstrap email: $($bootstrap.Email)"
             Write-Host "Bootstrap password: $($bootstrap.Password)"
         }
         Write-Host 'Next steps:'
-        Write-Host '1. Sign in and complete the Initial Security Setup.'
+        Write-Host '1. Open the login page and sign in with the bootstrap credentials above.'
         Write-Host '2. Open Settings > License & Subscription.'
         Write-Host '3. Click Buy / Renew Subscription, start the 7-day free trial or purchase, then activate the installation.'
         Write-Host '4. Add your OpenAI API key later in Settings if you want to use OpenAI immediately.'
