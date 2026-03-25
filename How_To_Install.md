@@ -90,12 +90,12 @@ For the fastest new-customer install, provide one of these commands on the marke
 
 macOS/Linux:
 ```bash
-curl -fsSL https://automateki.de/knowledgebase-ai/install.sh | bash
+curl -fsSL https://knowledgebaseai.de/knowledgebase-ai/install.sh | bash
 ```
 
 Windows PowerShell:
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://automateki.de/knowledgebase-ai/install.ps1 | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://knowledgebaseai.de/knowledgebase-ai/install.ps1 | iex"
 ```
 
 The hosted quick-start installer:

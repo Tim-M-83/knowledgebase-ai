@@ -20,18 +20,18 @@ That creates:
 - `dist/hosted-installers/install.ps1`
 
 Host those rendered files at:
-- `https://automateki.de/knowledgebase-ai/install.sh`
-- `https://automateki.de/knowledgebase-ai/install.ps1`
+- `https://knowledgebaseai.de/knowledgebase-ai/install.sh`
+- `https://knowledgebaseai.de/knowledgebase-ai/install.ps1`
 
 ## Website Commands
 Use these commands on the marketing website:
 
 ```bash
-curl -fsSL https://automateki.de/knowledgebase-ai/install.sh | bash
+curl -fsSL https://knowledgebaseai.de/knowledgebase-ai/install.sh | bash
 ```
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://automateki.de/knowledgebase-ai/install.ps1 | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://knowledgebaseai.de/knowledgebase-ai/install.ps1 | iex"
 ```
 
 ## Release Requirements

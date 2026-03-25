@@ -46,12 +46,12 @@ For the fastest customer install flow, host the rendered installer scripts from 
 
 macOS/Linux:
 ```bash
-curl -fsSL https://automateki.de/knowledgebase-ai/install.sh | bash
+curl -fsSL https://knowledgebaseai.de/knowledgebase-ai/install.sh | bash
 ```
 
 Windows PowerShell:
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://automateki.de/knowledgebase-ai/install.ps1 | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://knowledgebaseai.de/knowledgebase-ai/install.ps1 | iex"
 ```
 
 What the one-line installer does:
@@ -65,7 +65,7 @@ Before publishing the one-line installer publicly:
 - make `Tim-M-83/knowledgebase-ai` public so anonymous release downloads work
 - create a GitHub release with `knowledgebase-ai.tar.gz` and `knowledgebase-ai.zip`
 - render hosted installers with `QUICKSTART_LICENSE_SERVER_ADMIN_TOKEN`
-- host the rendered files at `https://automateki.de/knowledgebase-ai/install.sh` and `https://automateki.de/knowledgebase-ai/install.ps1`
+- host the rendered files at `https://knowledgebaseai.de/knowledgebase-ai/install.sh` and `https://knowledgebaseai.de/knowledgebase-ai/install.ps1`
 
 Security note:
 - the quick-start flow intentionally distributes a shared `LICENSE_SERVER_ADMIN_TOKEN` inside the public installer so checkout works immediately after installation
