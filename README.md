@@ -76,6 +76,7 @@ Workspace restore note:
 - The generated `LICENSE_WORKSPACE_ID` is the license anchor for that installation.
 - If a customer reinstalls and wants to reuse the same Polar purchase, they must restore the original `LICENSE_WORKSPACE_ID` in `.env` before restarting the API.
 - Reinstalling with a different Workspace ID intentionally creates a new license identity, so an old Polar key will be rejected as a workspace mismatch.
+- Under the current strict-restore policy, a billing email that is already linked to an older Polar workspace should be restored with that original `LICENSE_WORKSPACE_ID`; otherwise use a different billing email for a truly new workspace purchase.
 
 ## Manual Setup
 1. Copy env template:

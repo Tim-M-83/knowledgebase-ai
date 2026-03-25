@@ -145,11 +145,14 @@ export default function SettingsPage() {
 
   const formatLicenseActionError = (prefix: string, error: Error) => {
     const detail = error.message || 'Unknown license error.';
+    if (detail.includes('already linked to another Workspace ID on Polar')) {
+      return `${prefix}: ${detail} Restore the original LICENSE_WORKSPACE_ID to reuse the existing purchase, or save a different billing email below before starting a new checkout for this workspace.`;
+    }
     if (detail.includes('Activation limit reached for this workspace.')) {
       return `${prefix}: ${detail} This workspace is already using all allowed activation slots. Use "Reset All Activations" below, then try activating again.`;
     }
     if (detail.includes('License key does not match this workspace.')) {
-      return `${prefix}: ${detail} This Polar key belongs to a different Workspace ID. To reuse an existing purchase after a reinstall, restore the original Workspace ID in .env as LICENSE_WORKSPACE_ID, rebuild the API, and then activate again. Otherwise start a new checkout for the Workspace ID shown below.`;
+      return `${prefix}: ${detail} This usually means the billing email or purchase is already linked on Polar to a different Workspace ID. Restore the original Workspace ID in .env as LICENSE_WORKSPACE_ID, rebuild the API, and then activate again. Otherwise save a different billing email below and start a new checkout for the Workspace ID shown here.`;
     }
     if (detail.includes('demo/test domain')) {
       return `${prefix}: ${detail}`;
@@ -927,6 +930,11 @@ export default function SettingsPage() {
               <p className='text-[11px] text-slate-500'>
                 Your admin login email can be different. Subscription checkout and the Polar customer portal use the
                 billing email shown here.
+              </p>
+              <p className='text-[11px] text-slate-500'>
+                Under the current restore policy, one billing email effectively tracks one licensed workspace on Polar.
+                If this email was already used for an older workspace, restore that original Workspace ID or use a
+                different billing email for a brand new workspace purchase.
               </p>
               <div className='flex flex-wrap gap-2'>
                 <Button variant='secondary' onClick={saveBillingEmail} disabled={savingBillingEmail}>

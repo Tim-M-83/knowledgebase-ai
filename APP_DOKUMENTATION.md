@@ -582,6 +582,7 @@ docker compose up -d --build api frontend
 7. Device activation limits are enforced by the external license server, not by Polar. The current production default is `3` active installations per workspace.
 8. If an admin reaches the device limit or loses the local activation ID after a reinstall, `Settings > License & Subscription` now shows activation usage and provides `Reset All Activations` as the v1 recovery path.
 9. The Quick Start installer now writes a non-empty `LICENSE_WORKSPACE_ID` into `.env` and prints it at the end of installation so admins can keep it for manual restore.
+10. Under the current strict-restore policy, a billing email that is already linked to an older Polar workspace should be reused only by restoring that original `LICENSE_WORKSPACE_ID`. Use a different billing email if you want to purchase a truly new workspace.
 
 ### 7.8 Document lifecycle
 - `uploaded`: queued.
@@ -624,6 +625,7 @@ docker compose up -d --build api frontend
 - In Settings, license actions show an inline success/error banner directly inside `License & Subscription` so activation and validation results are visible immediately.
 - If the workspace has already consumed all activation slots, use `Reset All Activations` in Settings, then retry `Activate This Installation`.
 - If activation fails with `License key does not match this workspace.`, the stored Polar key belongs to a different `LICENSE_WORKSPACE_ID`. Restore the original Workspace ID in `.env`, rebuild the API, and retry activation. Otherwise start a new checkout for the new workspace.
+- If checkout is blocked because the billing email is already linked to another Workspace ID on Polar, restore the original `LICENSE_WORKSPACE_ID` for that purchase or save a different billing email before retrying checkout for a brand new workspace.
 - If checkout is blocked because the billing email is invalid, save a real reachable `Billing Email` directly in `Settings > License & Subscription` and retry `Buy / Renew Subscription`. Use `LICENSE_BILLING_EMAIL` in `.env` only as an operator fallback.
 
 ## 9. Security Notes
