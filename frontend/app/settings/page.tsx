@@ -146,7 +146,34 @@ export default function SettingsPage() {
     if (detail.includes('Activation limit reached for this workspace.')) {
       return `${prefix}: ${detail} This workspace is already using all allowed activation slots. Use "Reset All Activations" below, then try activating again.`;
     }
+    if (detail.includes('License key does not match this workspace.')) {
+      return `${prefix}: ${detail} This Polar key belongs to a different Workspace ID. To reuse an existing purchase after a reinstall, restore the original Workspace ID in .env as LICENSE_WORKSPACE_ID, rebuild the API, and then activate again. Otherwise start a new checkout for the Workspace ID shown below.`;
+    }
+    if (detail.includes('customer_email') && detail.includes('valid email address')) {
+      return `${prefix}: Polar rejected the billing email for this checkout. Use a real reachable admin email or set LICENSE_BILLING_EMAIL in .env, rebuild the API, and then try again.`;
+    }
     return `${prefix}: ${detail}`;
+  };
+
+  const copyWorkspaceId = async () => {
+    const workspaceId = licenseStatus?.workspace_id?.trim();
+    if (!workspaceId) {
+      setLicenseFeedback({ tone: 'error', text: 'No Workspace ID is available yet.' });
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(workspaceId);
+      setLicenseFeedback({
+        tone: 'info',
+        text: 'Workspace ID copied. Keep this exact value if you ever reinstall and want to restore the same licensed workspace.',
+      });
+    } catch {
+      setLicenseFeedback({
+        tone: 'error',
+        text: 'Could not copy the Workspace ID automatically. Copy it manually from the value shown below.',
+      });
+    }
   };
 
   const load = async () => {
@@ -746,7 +773,18 @@ export default function SettingsPage() {
               <p>License enforcement enabled: {licenseStatus.license_enabled ? 'Yes' : 'No'}</p>
               <p>Local license active: {licenseStatus.license_active ? 'Yes' : 'No'}</p>
               <p>Status: {licenseStatus.license_status || 'unknown'}</p>
-              <p>Workspace ID: {licenseStatus.workspace_id || 'Not available yet'}</p>
+              <div className='flex flex-wrap items-center gap-2'>
+                <p>Workspace ID: {licenseStatus.workspace_id || 'Not available yet'}</p>
+                {licenseStatus.workspace_id ? (
+                  <button
+                    type='button'
+                    onClick={copyWorkspaceId}
+                    className='inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-3 py-1 text-[11px] font-medium text-slate-700 transition hover:bg-slate-50'
+                  >
+                    Copy Workspace ID
+                  </button>
+                ) : null}
+              </div>
               <p>Local activation stored: {licenseStatus.instance_id_configured ? 'Yes' : 'No'}</p>
               <p>Polar license key stored: {licenseStatus.license_key_configured ? 'Yes' : 'No'}</p>
               {licenseStatus.activation_limit ? (
@@ -762,6 +800,18 @@ export default function SettingsPage() {
               {licenseStatus.last_validated_at ? <p>Last validation: {licenseStatus.last_validated_at}</p> : null}
               {licenseStatus.grace_until ? <p>Grace until: {licenseStatus.grace_until}</p> : null}
               {licenseStatus.last_error ? <p className='text-red-700'>Last error: {licenseStatus.last_error}</p> : null}
+            </div>
+            <div className='mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3 text-[11px] text-amber-900'>
+              <p className='font-semibold text-amber-950'>Reinstall Recovery</p>
+              <p className='mt-1'>
+                This Workspace ID is the license anchor for this installation. If you reinstall and want to reuse the
+                same Polar purchase, restore this exact value in <code>.env</code> as{' '}
+                <code>LICENSE_WORKSPACE_ID</code>, rebuild the API, and then activate with the same Polar key.
+              </p>
+              <p className='mt-1'>
+                A stored Polar license key does not automatically prove it matches the Workspace ID shown above. Old
+                keys continue to work only for the workspace they were originally issued for.
+              </p>
             </div>
             {licenseFeedback ? (
               <div className='mt-3'>
@@ -788,6 +838,11 @@ export default function SettingsPage() {
                 1. Click <span className='font-medium'>Buy / Renew Subscription</span> to start the 7-day free trial.
                 2. Complete checkout on the external license server. 3. Copy the Polar-generated license key from the
                 hosted success page. 4. Paste it here and activate this installation.
+              </p>
+              <p className='text-[11px] text-slate-500'>
+                If you are restoring an existing paid workspace after a reinstall, first restore the original{' '}
+                <code>LICENSE_WORKSPACE_ID</code> in your local <code>.env</code> and rebuild the API. Otherwise a key
+                from the old workspace will be rejected as a mismatch.
               </p>
             </div>
             <div className='mt-3 space-y-2'>

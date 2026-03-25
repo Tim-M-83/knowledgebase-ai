@@ -73,6 +73,10 @@ function New-HexSecret {
     return -join ($bytes | ForEach-Object { $_.ToString('x2') })
 }
 
+function New-WorkspaceId {
+    return 'workspace-' + (New-HexSecret).Substring(0, 32)
+}
+
 function Set-EnvValue {
     param(
         [string]$FilePath,
@@ -175,6 +179,7 @@ function Main {
         Copy-Item -LiteralPath (Join-Path $targetPath '.env.example') -Destination (Join-Path $targetPath '.env')
 
         $envFile = Join-Path $targetPath '.env'
+        $workspaceId = New-WorkspaceId
         Set-EnvValue -FilePath $envFile -Key 'JWT_SECRET' -Value (New-HexSecret)
         Set-EnvValue -FilePath $envFile -Key 'SECRETS_ENCRYPTION_KEY' -Value (New-HexSecret)
         Set-EnvValue -FilePath $envFile -Key 'NEXT_PUBLIC_API_URL' -Value 'http://localhost:8000'
@@ -183,7 +188,7 @@ function Main {
         Set-EnvValue -FilePath $envFile -Key 'LICENSE_SERVER_ADMIN_TOKEN' -Value $LicenseServerAdminToken
         Set-EnvValue -FilePath $envFile -Key 'LICENSE_COMPANY_NAME' -Value 'KnowledgeBase AI'
         Set-EnvValue -FilePath $envFile -Key 'LICENSE_BILLING_EMAIL' -Value ''
-        Set-EnvValue -FilePath $envFile -Key 'LICENSE_WORKSPACE_ID' -Value ''
+        Set-EnvValue -FilePath $envFile -Key 'LICENSE_WORKSPACE_ID' -Value $workspaceId
         Set-EnvValue -FilePath $envFile -Key 'LICENSE_ENFORCEMENT_ENABLED' -Value 'true'
         Set-EnvValue -FilePath $envFile -Key 'OPENAI_API_KEY' -Value ''
 
@@ -206,6 +211,7 @@ function Main {
         Write-Host '========================================================================'
         Write-Host "$AppName installed successfully."
         Write-Host 'Open: http://localhost:3000/login'
+        Write-Host "Workspace ID: $workspaceId"
         if ($bootstrap) {
             Write-Host "Bootstrap email: $($bootstrap.Email)"
             Write-Host "Bootstrap password: $($bootstrap.Password)"
@@ -215,6 +221,7 @@ function Main {
         Write-Host '2. Open Settings > License & Subscription.'
         Write-Host '3. Click Buy / Renew Subscription, start the 7-day free trial or purchase, then activate the installation.'
         Write-Host '4. Add your OpenAI API key later in Settings if you want to use OpenAI immediately.'
+        Write-Host "5. Keep this Workspace ID. To reuse the same Polar purchase after a reinstall, restore LICENSE_WORKSPACE_ID=$workspaceId in .env before restarting the API."
         Write-Host '========================================================================'
         Write-Host ''
     }

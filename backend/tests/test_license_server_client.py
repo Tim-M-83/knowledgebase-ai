@@ -72,6 +72,28 @@ def test_public_license_request_preserves_public_error_detail(monkeypatch):
     assert str(exc.value) == 'License key is invalid.'
 
 
+def test_admin_checkout_request_preserves_detailed_polar_error(monkeypatch):
+    monkeypatch.setattr(license_server, '_base_url', lambda: 'https://app.automateki.de')
+    monkeypatch.setattr(license_server, '_admin_headers', lambda: {'Authorization': 'Bearer valid'})
+    monkeypatch.setattr(
+        license_server.httpx,
+        'Client',
+        lambda **kwargs: _Client(
+            _Response(502, payload={'detail': 'Polar checkout creation failed (status 400): Product is archived.'})
+        ),
+    )
+
+    with pytest.raises(license_server.LicenseServerError) as exc:
+        license_server.create_checkout_url(
+            workspace_id='workspace-1',
+            company_name='KnowledgeBase AI',
+            email='billing@example.com',
+        )
+
+    assert exc.value.status_code == 502
+    assert str(exc.value) == 'Polar checkout creation failed (status 400): Product is archived.'
+
+
 def test_fetch_remote_status_includes_activation_usage(monkeypatch):
     monkeypatch.setattr(license_server, '_base_url', lambda: 'https://app.automateki.de')
     monkeypatch.setattr(license_server, '_json_headers', lambda: {'Accept': 'application/json'})

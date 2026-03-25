@@ -40,3 +40,9 @@ The one-line installers expect the latest GitHub release to publish these assets
 - `knowledgebase-ai.zip`
 
 They also assume the GitHub repository `Tim-M-83/knowledgebase-ai` is public.
+
+## Workspace Restore Behavior
+- The installer now generates a stable `LICENSE_WORKSPACE_ID` and writes it into the installed `.env`.
+- It also prints the Workspace ID at the end of the install.
+- Keep that value if you ever reinstall and want to reuse the same purchased Polar license.
+- Reinstalling with a different or empty `LICENSE_WORKSPACE_ID` creates a new workspace identity, so an old Polar key will no longer match.

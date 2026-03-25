@@ -207,6 +207,7 @@ def test_reset_current_activations_clears_local_instance_and_keeps_key(monkeypat
         license_manager,
         'reset_remote_activations',
         lambda **_kwargs: SimpleNamespace(
+            deactivated_count=2,
             current_period_end='2026-05-01T00:00:00Z',
             active_activation_count=0,
             total_activation_count=2,

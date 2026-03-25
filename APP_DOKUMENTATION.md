@@ -574,11 +574,13 @@ docker compose up -d --build api frontend
    - paste that key into `License & Subscription`
    - `Activate This Installation` after checkout completes
    - `Validate Installation` for a manual refresh if needed
+   - copy or save the shown `Workspace ID`; that exact value is required if the same licensed installation is restored after a reinstall
 4. On fresh installs, normal protected app usage remains blocked until an admin completes checkout, starts the 7-day free trial or paid subscription, pastes the Polar license key, and activates the installation.
 5. The local app does not talk to Polar directly anymore. Polar credentials, webhook processing, and subscription synchronization live only on the external license server.
 6. The production Polar access token used by the external license server must support both `license_keys:read` and `license_keys:write`; otherwise the hosted checkout success page may not be able to display the generated key and activation can fail.
 7. Device activation limits are enforced by the external license server, not by Polar. The current production default is `3` active installations per workspace.
 8. If an admin reaches the device limit or loses the local activation ID after a reinstall, `Settings > License & Subscription` now shows activation usage and provides `Reset All Activations` as the v1 recovery path.
+9. The Quick Start installer now writes a non-empty `LICENSE_WORKSPACE_ID` into `.env` and prints it at the end of installation so admins can keep it for manual restore.
 
 ### 7.8 Document lifecycle
 - `uploaded`: queued.
@@ -620,6 +622,8 @@ docker compose up -d --build api frontend
 - If activation is missing, use `Buy / Renew Subscription` on `app.automateki.de`, copy the Polar-generated license key from the hosted success page, paste it into Settings, then use `Activate This Installation`.
 - In Settings, license actions show an inline success/error banner directly inside `License & Subscription` so activation and validation results are visible immediately.
 - If the workspace has already consumed all activation slots, use `Reset All Activations` in Settings, then retry `Activate This Installation`.
+- If activation fails with `License key does not match this workspace.`, the stored Polar key belongs to a different `LICENSE_WORKSPACE_ID`. Restore the original Workspace ID in `.env`, rebuild the API, and retry activation. Otherwise start a new checkout for the new workspace.
+- If checkout fails because Polar rejects the billing email, use a real reachable admin email or set `LICENSE_BILLING_EMAIL` in `.env`, rebuild the API, and then retry `Buy / Renew Subscription`.
 
 ## 9. Security Notes
 - JWT is cookie-based with configurable secure flag.

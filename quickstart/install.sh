@@ -85,6 +85,10 @@ generate_secret() {
   fail 'Unable to generate a secure random secret. Install openssl, python3, or od.'
 }
 
+generate_workspace_id() {
+  printf 'workspace-%s' "$(generate_secret | cut -c1-32)"
+}
+
 set_env_value() {
   local file="$1"
   local key="$2"
@@ -165,6 +169,7 @@ extract_bootstrap_credentials() {
 main() {
   local jwt_secret
   local secrets_key
+  local workspace_id
   local creds
   local bootstrap_email=''
   local bootstrap_password=''
@@ -188,6 +193,7 @@ main() {
   cp "$INSTALL_DIR/.env.example" "$INSTALL_DIR/.env"
   jwt_secret="$(generate_secret)"
   secrets_key="$(generate_secret)"
+  workspace_id="$(generate_workspace_id)"
 
   set_env_value "$INSTALL_DIR/.env" 'JWT_SECRET' "$jwt_secret"
   set_env_value "$INSTALL_DIR/.env" 'SECRETS_ENCRYPTION_KEY' "$secrets_key"
@@ -197,7 +203,7 @@ main() {
   set_env_value "$INSTALL_DIR/.env" 'LICENSE_SERVER_ADMIN_TOKEN' "$LICENSE_SERVER_ADMIN_TOKEN"
   set_env_value "$INSTALL_DIR/.env" 'LICENSE_COMPANY_NAME' 'KnowledgeBase AI'
   set_env_value "$INSTALL_DIR/.env" 'LICENSE_BILLING_EMAIL' ''
-  set_env_value "$INSTALL_DIR/.env" 'LICENSE_WORKSPACE_ID' ''
+  set_env_value "$INSTALL_DIR/.env" 'LICENSE_WORKSPACE_ID' "$workspace_id"
   set_env_value "$INSTALL_DIR/.env" 'LICENSE_ENFORCEMENT_ENABLED' 'true'
   set_env_value "$INSTALL_DIR/.env" 'OPENAI_API_KEY' ''
 
@@ -221,6 +227,7 @@ main() {
   printf '\n%s\n' '========================================================================'
   printf '%s installed successfully.\n' "$APP_NAME"
   printf 'Open: http://localhost:3000/login\n'
+  printf 'Workspace ID: %s\n' "$workspace_id"
   if [ -n "$bootstrap_email" ] && [ -n "$bootstrap_password" ]; then
     printf 'Bootstrap email: %s\n' "$bootstrap_email"
     printf 'Bootstrap password: %s\n' "$bootstrap_password"
@@ -230,6 +237,7 @@ main() {
   printf '2. Open Settings > License & Subscription.\n'
   printf '3. Click Buy / Renew Subscription, start the 7-day free trial or purchase, then activate the installation.\n'
   printf '4. Add your OpenAI API key later in Settings if you want to use OpenAI immediately.\n'
+  printf '5. Keep this Workspace ID. To reuse the same Polar purchase after a reinstall, restore LICENSE_WORKSPACE_ID=%s in .env before restarting the API.\n' "$workspace_id"
   printf '%s\n\n' '========================================================================'
 }
 
