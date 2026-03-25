@@ -1,0 +1,35 @@
+name: Release Package
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build release archives
+        run: bash scripts/build-release-artifacts.sh
+
+      - name: Render hosted installers
+        env:
+          QUICKSTART_LICENSE_SERVER_ADMIN_TOKEN: ${{ secrets.QUICKSTART_LICENSE_SERVER_ADMIN_TOKEN }}
+        run: bash scripts/render-quickstart-installers.sh
+
+      - name: Publish GitHub release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/knowledgebase-ai.tar.gz
+            dist/knowledgebase-ai.zip
+            dist/hosted-installers/install.sh
+            dist/hosted-installers/install.ps1
+          generate_release_notes: true

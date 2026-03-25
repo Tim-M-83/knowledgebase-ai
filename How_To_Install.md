@@ -85,6 +85,39 @@ Before starting:
 ## 6. Fresh Installation (New Environment)
 Run these steps from the project root (folder containing `docker-compose.yml`).
 
+### Quick Start (One-Line Installer)
+For the fastest new-customer install, provide one of these commands on the marketing website:
+
+macOS/Linux:
+```bash
+curl -fsSL https://automateki.de/knowledgebase-ai/install.sh | bash
+```
+
+Windows PowerShell:
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://automateki.de/knowledgebase-ai/install.ps1 | iex"
+```
+
+The hosted quick-start installer:
+- requires Docker Desktop or Docker Engine to already be installed and running
+- downloads the latest stable GitHub release, not the current `main` branch
+- creates `.env` automatically with secure local defaults
+- starts the Docker stack with `docker compose up -d --build`
+- prints the bootstrap admin credentials from the API logs when available
+
+Quick-start defaults:
+- `JWT_SECRET` and `SECRETS_ENCRYPTION_KEY` are generated automatically
+- `NEXT_PUBLIC_API_URL=http://localhost:8000`
+- `FRONTEND_URL=http://localhost:3000`
+- `LICENSE_SERVER_BASE_URL=https://app.automateki.de`
+- `LICENSE_ENFORCEMENT_ENABLED=true`
+- `OPENAI_API_KEY=` remains empty until the admin adds it later in Settings
+
+Important:
+- The quick-start flow is for fresh installations only and aborts if `./knowledgebase-ai` already exists.
+- The hosted installer also embeds the shared `LICENSE_SERVER_ADMIN_TOKEN` so checkout works immediately after install.
+- That makes installation friction lower, but it also means the `/billing/*` protection is no longer based on a secret known only to trusted operators.
+
 ### Step 1: Prepare environment file
 macOS/Linux:
 ```bash
