@@ -1,4 +1,6 @@
+import ipaddress
 import logging
+import re
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -14,6 +16,8 @@ from app.models.user import Role, User
 from app.schemas.settings import (
     DataSettingsOut,
     DataSettingsUpdate,
+    NetworkHelperOut,
+    NetworkHelperUpdate,
     OllamaTestRequest,
     OllamaTestResponse,
     OpenAITestRequest,
@@ -26,6 +30,8 @@ from app.services.provider_settings import (
     PROVIDER_OLLAMA,
     PROVIDER_OPENAI,
     clear_runtime_openai_api_key,
+    delete_setting as delete_runtime_setting,
+    get_setting as get_runtime_setting,
     get_runtime_ollama_base_url,
     get_runtime_ollama_chat_model,
     get_runtime_ollama_embeddings_model,
@@ -34,6 +40,7 @@ from app.services.provider_settings import (
     get_runtime_provider_pair,
     mask_openai_api_key,
     normalize_ollama_base_url,
+    set_setting as set_runtime_setting,
     store_runtime_ollama_base_url,
     store_runtime_ollama_chat_model,
     store_runtime_ollama_embeddings_model,
@@ -52,7 +59,9 @@ logger = logging.getLogger(__name__)
 
 KEY_RETENTION = 'retention_days'
 KEY_MAX_UPLOAD = 'max_upload_mb'
+KEY_NETWORK_HELPER_LAN_HOST = 'network_helper_lan_host'
 FALLBACK_CHAT_MODELS = ['gpt-4o-mini', 'gpt-4.1-mini', 'gpt-4.1-nano']
+HOSTNAME_LABEL_RE = re.compile(r'^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$')
 
 
 def _get_or_create(db: Session, key: str, default: str) -> AppSetting:
@@ -72,6 +81,71 @@ def _candidate_chat_models(preferred: str) -> list[str]:
         if model and model not in unique:
             unique.append(model)
     return unique
+
+
+def _get_network_helper_lan_host(db: Session) -> str | None:
+    item = get_runtime_setting(db, KEY_NETWORK_HELPER_LAN_HOST)
+    if not item:
+        return None
+    value = item.value.strip()
+    return value or None
+
+
+def _normalize_network_helper_lan_host(value: str) -> str | None:
+    if value == '':
+        return None
+    if not value.strip():
+        raise HTTPException(status_code=400, detail='LAN host override cannot be whitespace only.')
+
+    candidate = value.strip().rstrip('.')
+    if not candidate:
+        raise HTTPException(status_code=400, detail='LAN host override is invalid.')
+    if any(char.isspace() for char in candidate):
+        raise HTTPException(status_code=400, detail='LAN host override must not contain spaces.')
+    if any(token in candidate for token in ('://', '/', '?', '#', '@')):
+        raise HTTPException(
+            status_code=400,
+            detail='LAN host override must be only a hostname or IPv4 address, not a full URL.',
+        )
+    if ':' in candidate:
+        raise HTTPException(
+            status_code=400,
+            detail='LAN host override must not include a port. Enter only a hostname or IPv4 address.',
+        )
+
+    lowered = candidate.lower()
+    if lowered in {'localhost', '127.0.0.1', '::1'}:
+        raise HTTPException(
+            status_code=400,
+            detail='Use a LAN IP or internal DNS hostname, not localhost or a loopback address.',
+        )
+
+    try:
+        parsed_ip = ipaddress.ip_address(candidate)
+    except ValueError:
+        if len(candidate) > 253:
+            raise HTTPException(status_code=400, detail='LAN host override is too long.')
+        labels = candidate.split('.')
+        if any(not label or len(label) > 63 or not HOSTNAME_LABEL_RE.fullmatch(label) for label in labels):
+            raise HTTPException(
+                status_code=400,
+                detail='LAN host override must be a valid hostname or IPv4 address.',
+            )
+        if all(label.isdigit() for label in labels):
+            raise HTTPException(
+                status_code=400,
+                detail='LAN host override must be a valid hostname or IPv4 address.',
+            )
+        return lowered
+
+    if parsed_ip.version != 4:
+        raise HTTPException(status_code=400, detail='Only IPv4 LAN addresses are supported here.')
+    if parsed_ip.is_loopback or parsed_ip.is_multicast or parsed_ip.is_unspecified:
+        raise HTTPException(
+            status_code=400,
+            detail='Use a reachable LAN IPv4 address, not a loopback or special-purpose address.',
+        )
+    return str(parsed_ip)
 
 
 def _discover_openai_chat_models(client: OpenAI) -> list[str]:
@@ -431,6 +505,36 @@ def test_ollama_connection(
         raise HTTPException(status_code=400, detail=result.detail)
     logger.info('Ollama connection test succeeded for user_id=%s', current_user.id)
     return result
+
+
+@router.get('/network-helper', response_model=NetworkHelperOut)
+def get_network_helper_settings(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(Role.admin)),
+):
+    return NetworkHelperOut(lan_host_override=_get_network_helper_lan_host(db))
+
+
+@router.put('/network-helper', response_model=NetworkHelperOut)
+def update_network_helper_settings(
+    payload: NetworkHelperUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(Role.admin)),
+):
+    validate_csrf(request)
+    normalized = _normalize_network_helper_lan_host(payload.lan_host_override)
+    if normalized is None:
+        delete_runtime_setting(db, KEY_NETWORK_HELPER_LAN_HOST)
+    else:
+        set_runtime_setting(db, KEY_NETWORK_HELPER_LAN_HOST, normalized)
+
+    logger.info(
+        'Network helper LAN host updated by user_id=%s has_override=%s',
+        current_user.id,
+        bool(normalized),
+    )
+    return NetworkHelperOut(lan_host_override=normalized)
 
 
 @router.get('/log-export')

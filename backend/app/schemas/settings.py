@@ -61,3 +61,11 @@ class OllamaTestResponse(BaseModel):
     embeddings_endpoint_ok: bool
     detail: str
     embedding_dimension: int | None = None
+
+
+class NetworkHelperOut(BaseModel):
+    lan_host_override: str | None = None
+
+
+class NetworkHelperUpdate(BaseModel):
+    lan_host_override: str = Field(default='', max_length=253)

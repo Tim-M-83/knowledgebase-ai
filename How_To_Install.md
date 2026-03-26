@@ -249,6 +249,11 @@ Expected: JSON response with status and provider/db/redis fields.
 If one host machine should serve users in the local network:
 
 ### 9.1 LAN URLs
+The easiest in-app way to prepare LAN access is now `Settings > Network Access Helper`.
+- It shows whether the current installation is still `localhost`-only.
+- It can save a preferred LAN host override.
+- It generates copyable frontend/API URLs and the matching `.env` snippet shown below.
+
 With current compose ports, app is reachable via host IP:
 - Frontend: `http://<HOST_IP>:3000`
 - API: `http://<HOST_IP>:8000`
@@ -270,11 +275,12 @@ Rules:
 ### 9.3 Rebuild after LAN config change
 Required command:
 ```bash
-docker compose up -d --build frontend api
+docker compose up -d --build api frontend
 ```
 
 Reason:
 - `NEXT_PUBLIC_API_URL` is compiled into the frontend build output.
+- The `Network Access Helper` in Settings shows this same rebuild command after it generates the LAN values.
 
 ### 9.4 Network prerequisites
 - Host firewall must allow inbound connections on required ports.
@@ -376,7 +382,7 @@ Fix:
 1. Set `.env` LAN values for `NEXT_PUBLIC_API_URL` and `FRONTEND_URL`.
 2. Rebuild:
 ```bash
-docker compose up -d --build frontend api
+docker compose up -d --build api frontend
 ```
 
 ### Port already in use
@@ -490,6 +496,7 @@ docker compose up -d --build api frontend
    - Use `Validate Installation` later whenever you want a manual status refresh.
    - Copy or note the displayed `Workspace ID` as well. If the machine is reinstalled later and you want to reuse the same Polar purchase, restore that exact value in `.env` as `LICENSE_WORKSPACE_ID` before restarting the API.
 3. For troubleshooting operational issues, open `Settings > Support Diagnostics` and use `Export Support Logs` to download a bounded ZIP of recent API and worker events/errors.
+4. If the app should be reachable from other LAN/WLAN devices, open `Settings > Network Access Helper` to generate the correct share URLs, `.env` values, and rebuild command for that host.
 
 ### 16.3 Reinstall / Manual Restore
 If the customer reinstalls the app and wants to reuse the same purchased Polar license:

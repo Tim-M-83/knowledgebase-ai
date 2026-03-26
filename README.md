@@ -138,6 +138,7 @@ Notes:
 - Automatic bootstrap admin on fresh installs with forced first-login credential change
 - External license-server monetization flow with hosted Polar checkout, pasted Polar license key activation, and local grace-period enforcement
 - Dedicated billing email flow in `License & Subscription` so Polar checkout does not depend on the admin login email
+- Admin-only Network Access Helper for LAN/WLAN reachability guidance, copyable URLs, and matching `.env` values
 - Strict RBAC checks server-side
 - Document upload + async ingestion (PDF/TXT/CSV)
 - Chunking with overlap + vector indexing (pgvector)
@@ -162,6 +163,7 @@ Notes:
   - `GET /settings/providers`, `PUT /settings/providers` (runtime provider + OpenAI/Ollama config)
   - `POST /settings/providers/test-openai` (tests OpenAI Responses + Embeddings endpoints)
   - `POST /settings/providers/test-ollama` (tests Ollama chat + embeddings endpoints)
+  - `GET /settings/network-helper`, `PUT /settings/network-helper` (admin-only LAN host override + helper state)
   - `GET /settings/log-export` (admin-only bounded ZIP export of recent API + worker support logs)
 - Health: `GET /health`
 
@@ -177,6 +179,7 @@ Notes:
 - Admin: users/tags/departments CRUD
 - Settings: provider/model display + connection test
   - Runtime provider selector (OpenAI/Ollama), Ollama URL/model config, OpenAI key update
+  - Admin-only Network Access Helper for LAN/WLAN URL generation, `.env` snippets, and rebuild guidance
   - Admin-only support diagnostics export for recent API + worker events/errors
 
 ## Tests

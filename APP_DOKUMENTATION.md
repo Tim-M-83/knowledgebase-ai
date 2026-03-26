@@ -397,6 +397,8 @@ All endpoints in this group enforce the global feature flag and return `403` whe
 | DELETE | `/settings/providers/openai-key` | Admin + CSRF | Hard-delete runtime OpenAI key (disables OpenAI key usage until a new key is saved). |
 | POST | `/settings/providers/test-openai` | Admin/Editor | Test OpenAI chat + embeddings endpoints. |
 | POST | `/settings/providers/test-ollama` | Admin/Editor | Test Ollama chat + embeddings endpoints. |
+| GET | `/settings/network-helper` | Admin | Get the saved LAN host override used by the Network Access Helper. |
+| PUT | `/settings/network-helper` | Admin + CSRF | Save or clear the LAN host override used to generate LAN/WLAN share URLs and `.env` values. |
 | GET | `/settings/log-export` | Admin | Download a bounded ZIP export of recent API + worker support logs. |
 
 ### 5.13 License
@@ -488,6 +490,7 @@ docker compose up --build
 - API: `http://localhost:8000`
 
 ### 7.3 LAN Deployment (Company Network)
+- `Settings > Network Access Helper` is the easiest in-app way to generate the right LAN/WLAN URLs, `.env` snippet, and rebuild command for the current installation.
 - With the current Docker port publishing, the app is reachable from LAN peers through the host machine IP/DNS:
   - Frontend: `http://<HOST_IP>:3000`
   - API: `http://<HOST_IP>:8000`
@@ -503,9 +506,10 @@ FRONTEND_URL=http://192.168.x.x:3000
 - Keep one consistent origin style for all users (IP/DNS), and avoid mixed usage with `localhost`.
 - After changing these values, rebuild/restart frontend and API:
 ```bash
-docker compose up -d --build frontend api
+docker compose up -d --build api frontend
 ```
 - Reason: `NEXT_PUBLIC_API_URL` is embedded into the frontend build output.
+- The Network Access Helper shows this same command after it generates the LAN values.
 - Network prerequisites:
   - Host firewall must allow inbound LAN connections.
   - Internal routing/ACL/VLAN policies must permit access to the host.

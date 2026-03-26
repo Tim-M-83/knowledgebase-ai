@@ -220,6 +220,10 @@ export type Health = {
   redis: boolean;
 };
 
+export type NetworkHelperSettings = {
+  lan_host_override?: string | null;
+};
+
 export type ClearSessionsResponse = {
   deleted_sessions: number;
 };

@@ -12,6 +12,7 @@ import { getCurrentUser } from '@/lib/auth';
 import {
   Health,
   LicenseStatus,
+  NetworkHelperSettings,
   OllamaTestResult,
   OpenAITestResult,
   ProviderRuntime,
@@ -23,6 +24,7 @@ import {
 type DataSettings = { retention_days: number; max_upload_mb: number; email_helper_enabled: boolean };
 type FeedbackTone = 'success' | 'error' | 'info';
 type FeedbackState = { tone: FeedbackTone; text: string };
+type NetworkAccessMode = 'localhost-only' | 'LAN/WLAN direct' | 'hostname / custom origin';
 
 function FeedbackBanner({ feedback }: { feedback: FeedbackState }) {
   const palette =
@@ -60,11 +62,61 @@ function FeedbackBanner({ feedback }: { feedback: FeedbackState }) {
   );
 }
 
+function isLoopbackHost(host: string) {
+  const normalized = host.trim().toLowerCase();
+  return normalized === 'localhost' || normalized === '127.0.0.1' || normalized === '::1' || normalized === '[::1]';
+}
+
+function isIpv4Host(host: string) {
+  const parts = host.trim().split('.');
+  if (parts.length !== 4) {
+    return false;
+  }
+  return parts.every((part) => /^\d+$/.test(part) && Number(part) >= 0 && Number(part) <= 255);
+}
+
+function isPrivateIpv4Host(host: string) {
+  if (!isIpv4Host(host)) {
+    return false;
+  }
+  const [first, second] = host.split('.').map(Number);
+  return first === 10 || (first === 172 && second >= 16 && second <= 31) || (first === 192 && second === 168);
+}
+
+function looksLikeHostname(host: string) {
+  if (!host || isIpv4Host(host) || host.includes(':')) {
+    return false;
+  }
+
+  return host.split('.').every((label) => /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/.test(label));
+}
+
+function detectAccessMode(host: string): NetworkAccessMode {
+  if (isLoopbackHost(host)) {
+    return 'localhost-only';
+  }
+  if (isPrivateIpv4Host(host)) {
+    return 'LAN/WLAN direct';
+  }
+  return 'hostname / custom origin';
+}
+
+function getAutoDetectedLanHost(host: string) {
+  if (!host || isLoopbackHost(host)) {
+    return null;
+  }
+  if (isPrivateIpv4Host(host) || looksLikeHostname(host)) {
+    return host;
+  }
+  return null;
+}
+
 export default function SettingsPage() {
   const router = useRouter();
   const [health, setHealth] = useState<Health | null>(null);
   const [providerSettings, setProviderSettings] = useState<ProviderSettings | null>(null);
   const [licenseStatus, setLicenseStatus] = useState<LicenseStatus | null>(null);
+  const [networkHelper, setNetworkHelper] = useState<NetworkHelperSettings | null>(null);
   const [dataSettings, setDataSettings] = useState<DataSettings | null>(null);
   const [currentRole, setCurrentRole] = useState<'admin' | 'editor' | 'viewer' | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -77,6 +129,7 @@ export default function SettingsPage() {
 
   const [message, setMessage] = useState('');
   const [licenseFeedback, setLicenseFeedback] = useState<FeedbackState | null>(null);
+  const [networkFeedback, setNetworkFeedback] = useState<FeedbackState | null>(null);
   const [diagnosticsFeedback, setDiagnosticsFeedback] = useState<FeedbackState | null>(null);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newEmail, setNewEmail] = useState('');
@@ -84,6 +137,9 @@ export default function SettingsPage() {
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [licenseKeyInput, setLicenseKeyInput] = useState('');
   const [billingEmailInput, setBillingEmailInput] = useState('');
+  const [networkHostInput, setNetworkHostInput] = useState('');
+  const [currentOrigin, setCurrentOrigin] = useState('');
+  const [currentBrowserHost, setCurrentBrowserHost] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
   const [showLicenseKey, setShowLicenseKey] = useState(false);
@@ -99,6 +155,7 @@ export default function SettingsPage() {
   const [deactivatingLicense, setDeactivatingLicense] = useState(false);
   const [resettingActivations, setResettingActivations] = useState(false);
   const [savingBillingEmail, setSavingBillingEmail] = useState(false);
+  const [savingNetworkHelper, setSavingNetworkHelper] = useState(false);
   const [exportingLogs, setExportingLogs] = useState(false);
 
   const canSaveProvider = currentRole === 'admin';
@@ -224,15 +281,21 @@ export default function SettingsPage() {
       return;
     }
 
-    const [healthData, providerData, settingsData] = await Promise.all([
+    const networkHelperPromise =
+      me.role === 'admin' ? api.get<NetworkHelperSettings>('/settings/network-helper') : Promise.resolve(null);
+
+    const [healthData, providerData, settingsData, licenseData, networkHelperData] = await Promise.all([
       api.get<Health>('/health'),
       api.get<ProviderSettings>('/settings/providers'),
       api.get<DataSettings>('/settings/data'),
-      reloadLicenseStatus()
+      reloadLicenseStatus(),
+      networkHelperPromise,
     ]);
     setHealth(healthData);
     setProviderSettings(providerData);
     setDataSettings(settingsData);
+    setLicenseStatus(licenseData);
+    setNetworkHelper(networkHelperData);
     setProvider(providerData.llm_provider);
     setOllamaBaseUrl(providerData.ollama_base_url);
     setOllamaChatModel(providerData.ollama_chat_model);
@@ -244,8 +307,20 @@ export default function SettingsPage() {
   }, []);
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    setCurrentOrigin(window.location.origin);
+    setCurrentBrowserHost(window.location.hostname);
+  }, []);
+
+  useEffect(() => {
     setBillingEmailInput(licenseStatus?.billing_email || '');
   }, [licenseStatus?.billing_email]);
+
+  useEffect(() => {
+    setNetworkHostInput(networkHelper?.lan_host_override || '');
+  }, [networkHelper?.lan_host_override]);
 
   const availableProviders = useMemo(
     () => providerSettings?.available_providers ?? (['openai', 'ollama'] as ProviderRuntime[]),
@@ -270,6 +345,44 @@ export default function SettingsPage() {
   }, [licenseStatus]);
 
   const checkoutBlockedByBillingEmail = Boolean(billingEmailWarning);
+  const detectedAccessMode = useMemo(
+    () => (currentBrowserHost ? detectAccessMode(currentBrowserHost) : null),
+    [currentBrowserHost]
+  );
+  const autoDetectedLanHost = useMemo(
+    () => getAutoDetectedLanHost(currentBrowserHost),
+    [currentBrowserHost]
+  );
+  const effectiveLanHost = useMemo(
+    () => (networkHelper?.lan_host_override?.trim() || autoDetectedLanHost || null),
+    [networkHelper?.lan_host_override, autoDetectedLanHost]
+  );
+  const generatedFrontendUrl = effectiveLanHost ? `http://${effectiveLanHost}:3000` : null;
+  const generatedApiUrl = effectiveLanHost ? `http://${effectiveLanHost}:8000` : null;
+  const generatedEnvSnippet = effectiveLanHost
+    ? `NEXT_PUBLIC_API_URL=http://${effectiveLanHost}:8000\nFRONTEND_URL=http://${effectiveLanHost}:3000`
+    : null;
+  const networkWarning = useMemo(() => {
+    if (!currentBrowserHost) {
+      return null;
+    }
+    if (isLoopbackHost(currentBrowserHost) && !networkHelper?.lan_host_override) {
+      return 'This installation is currently opened through localhost, so other computers on the same LAN/WLAN cannot reach it yet. Enter the host machine LAN IP or internal DNS name below to generate the correct access URLs and .env values.';
+    }
+    if (!effectiveLanHost) {
+      return 'The current browser origin does not provide a reliable LAN host automatically. Save a LAN IPv4 address or internal DNS hostname below to generate exact URLs for other devices.';
+    }
+    return null;
+  }, [currentBrowserHost, effectiveLanHost, networkHelper?.lan_host_override]);
+
+  const copyNetworkValue = async (label: string, value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setNetworkFeedback({ tone: 'success', text: `${label} copied.` });
+    } catch {
+      setNetworkFeedback({ tone: 'error', text: `Could not copy the ${label.toLowerCase()} automatically.` });
+    }
+  };
 
   const testOpenAI = async () => {
     setTestingOpenAI(true);
@@ -457,6 +570,46 @@ export default function SettingsPage() {
     } finally {
       setSavingBillingEmail(false);
     }
+  };
+
+  const persistNetworkHelper = async (lanHostOverride: string) => {
+    if (!canSaveProvider) {
+      setNetworkFeedback({ tone: 'error', text: 'Only admins can save network helper settings.' });
+      return;
+    }
+
+    setSavingNetworkHelper(true);
+    setNetworkFeedback(null);
+    try {
+      const updated = await api.put<NetworkHelperSettings>(
+        '/settings/network-helper',
+        { lan_host_override: lanHostOverride },
+        true
+      );
+      setNetworkHelper(updated);
+      setNetworkHostInput(updated.lan_host_override || '');
+      setNetworkFeedback({
+        tone: 'success',
+        text: updated.lan_host_override
+          ? 'LAN host override saved. The generated LAN/WLAN URLs below now use this host.'
+          : 'LAN host override cleared. The helper now falls back to the current browser origin when possible.',
+      });
+    } catch (error) {
+      setNetworkFeedback({
+        tone: 'error',
+        text: `Failed to save network helper settings: ${(error as Error).message}`,
+      });
+    } finally {
+      setSavingNetworkHelper(false);
+    }
+  };
+
+  const saveNetworkHelper = async () => {
+    await persistNetworkHelper(networkHostInput);
+  };
+
+  const clearNetworkHelper = async () => {
+    await persistNetworkHelper('');
   };
 
   const startCheckout = async () => {
@@ -1095,6 +1248,116 @@ export default function SettingsPage() {
           </div>
         ) : null}
       </Card>
+
+      {canSaveProvider ? (
+        <Card>
+          <h2 className='text-sm font-semibold'>Network Access Helper</h2>
+          <p className='mt-2 text-xs text-slate-500'>
+            Use this helper to understand whether the current installation is only reachable on this machine or can be
+            shared with other computers on your LAN/WLAN. It generates copyable URLs and the matching <code>.env</code>{' '}
+            snippet, but it does not change your network or Docker configuration automatically.
+          </p>
+          {networkWarning ? (
+            <div className='mt-3'>
+              <FeedbackBanner feedback={{ tone: 'info', text: networkWarning }} />
+            </div>
+          ) : null}
+          {networkFeedback ? (
+            <div className='mt-3'>
+              <FeedbackBanner feedback={networkFeedback} />
+            </div>
+          ) : null}
+          <div className='mt-3 space-y-1 text-sm text-slate-600'>
+            <p>Current access origin: {currentOrigin || 'Loading current browser origin...'}</p>
+            <p>Current API target: {api.baseUrl}</p>
+            <p>Detected access mode: {detectedAccessMode || 'Loading...'}</p>
+            <p>Saved LAN host override: {networkHelper?.lan_host_override || 'None'}</p>
+          </div>
+          <div className='mt-3 space-y-2'>
+            <label className='text-xs font-medium text-slate-600'>LAN Host Override</label>
+            <Input
+              value={networkHostInput}
+              onChange={(e) => setNetworkHostInput(e.target.value)}
+              placeholder='192.168.1.50 or office-kbai.local'
+            />
+            <p className='text-[11px] text-slate-500'>
+              Enter the host machine LAN IPv4 address or internal DNS name. Do not enter <code>http://</code>, a port,
+              or a path.
+            </p>
+            <div className='flex flex-wrap gap-2'>
+              <Button variant='secondary' onClick={saveNetworkHelper} disabled={savingNetworkHelper}>
+                {savingNetworkHelper ? 'Saving network helper...' : 'Save LAN Host'}
+              </Button>
+              <Button
+                variant='secondary'
+                onClick={clearNetworkHelper}
+                disabled={savingNetworkHelper || !networkHelper?.lan_host_override}
+              >
+                Clear Override
+              </Button>
+            </div>
+          </div>
+          <div className='mt-4 space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600'>
+            <div>
+              <p className='font-semibold text-slate-700'>Reach This App from Another Computer</p>
+              {generatedFrontendUrl && generatedApiUrl ? (
+                <div className='mt-2 space-y-2'>
+                  <div className='flex flex-wrap items-center gap-2'>
+                    <p>Frontend URL: <code>{generatedFrontendUrl}</code></p>
+                    <Button variant='secondary' onClick={() => copyNetworkValue('Frontend URL', generatedFrontendUrl)}>
+                      Copy Frontend URL
+                    </Button>
+                  </div>
+                  <div className='flex flex-wrap items-center gap-2'>
+                    <p>API URL: <code>{generatedApiUrl}</code></p>
+                    <Button variant='secondary' onClick={() => copyNetworkValue('API URL', generatedApiUrl)}>
+                      Copy API URL
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <p className='mt-1'>
+                  No exact LAN/WLAN URL can be generated yet. Save a LAN host override above if this installation is
+                  currently opened only through <code>localhost</code> or another non-shareable origin.
+                </p>
+              )}
+            </div>
+            <div>
+              <p className='font-semibold text-slate-700'>Recommended `.env` for LAN</p>
+              {generatedEnvSnippet ? (
+                <>
+                  <pre className='mt-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-3 text-[11px] text-slate-700'>
+                    <code>{generatedEnvSnippet}</code>
+                  </pre>
+                  <div className='mt-2 flex flex-wrap gap-2'>
+                    <Button variant='secondary' onClick={() => copyNetworkValue('.env snippet', generatedEnvSnippet)}>
+                      Copy `.env` Snippet
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <p className='mt-1'>Save a LAN host override first to generate the matching <code>.env</code> values.</p>
+              )}
+            </div>
+            <div>
+              <p className='font-semibold text-slate-700'>Required Rebuild Command</p>
+              <div className='mt-2 flex flex-wrap items-center gap-2'>
+                <code>docker compose up -d --build api frontend</code>
+                <Button
+                  variant='secondary'
+                  onClick={() => copyNetworkValue('rebuild command', 'docker compose up -d --build api frontend')}
+                >
+                  Copy Rebuild Command
+                </Button>
+              </div>
+              <p className='mt-2'>
+                After you update <code>.env</code>, rebuild both services so the frontend picks up the new API origin
+                and the backend CORS setting matches it.
+              </p>
+            </div>
+          </div>
+        </Card>
+      ) : null}
 
       {canSaveProvider ? (
         <Card>

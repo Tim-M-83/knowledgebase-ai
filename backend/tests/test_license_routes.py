@@ -83,7 +83,7 @@ def test_validate_translates_license_server_errors(monkeypatch):
         license.validate(
             request=object(),
             db=object(),
-            _=SimpleNamespace(id=1, role=Role.admin),
+            current_user=SimpleNamespace(id=1, role=Role.admin),
         )
 
     assert exc.value.status_code == 502

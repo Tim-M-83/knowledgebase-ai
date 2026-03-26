@@ -40,7 +40,7 @@ def test_delete_openai_key_calls_clear_and_returns_updated_payload(monkeypatch):
     out = settings.delete_openai_api_key(
         request=object(),
         db=db,
-        _=SimpleNamespace(id=1, role=Role.admin),
+        current_user=SimpleNamespace(id=1, role=Role.admin),
     )
 
     assert called == {'csrf': True, 'cleared': True}
@@ -57,7 +57,7 @@ def test_delete_openai_key_rejects_invalid_csrf(monkeypatch):
         settings.delete_openai_api_key(
             request=object(),
             db=object(),
-            _=SimpleNamespace(id=1, role=Role.admin),
+            current_user=SimpleNamespace(id=1, role=Role.admin),
         )
 
     assert exc.value.status_code == 403
