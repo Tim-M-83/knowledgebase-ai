@@ -179,6 +179,7 @@ Notes:
 - Admin: users/tags/departments CRUD
 - Settings: provider/model display + connection test
   - Runtime provider selector (OpenAI/Ollama), Ollama URL/model config, OpenAI key update
+  - Admin-only app version display in `Service Health`, using the installed GitHub release tag format (for example `v0.1.5`)
   - Admin-only Network Access Helper for LAN/WLAN URL generation, `.env` snippets, and rebuild guidance
   - Admin-only support diagnostics export for recent API + worker events/errors
 

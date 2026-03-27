@@ -21,10 +21,18 @@ from app.schemas.summarizer import (
     SummarizerAskRequest,
     SummarizerDocumentDetail,
     SummarizerDocumentOut,
+    SummarizerSummarizeRequest,
     SummarizerMessageOut,
 )
 from app.services.llm import get_llm_provider
 from app.services.retrieval import retrieval_confidence
+from app.services.summarizer_language import (
+    build_document_chat_prompt,
+    build_summary_prompt,
+    ensure_document_language_code,
+    get_localized_text,
+    resolve_response_language,
+)
 from app.services.summarizer_retrieval import search_summarizer_chunks
 from app.tasks.ingestion_tasks import ingest_summarizer_document_task
 from app.utils.file_storage import delete_file, store_upload_file
@@ -44,33 +52,6 @@ ALLOWED_MIME_TYPES = {
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/octet-stream',
 }
-LOW_CONFIDENCE_WARNING = (
-    'Answer generated with low retrieval confidence. Verify against the document context.'
-)
-
-
-def _build_summary_prompt() -> str:
-    return (
-        'You are an AI document summarizer for external documents. '
-        'Use only the provided context from this single document.\n\n'
-        'Return Markdown with this exact structure:\n'
-        '## Executive Summary\n'
-        '## Most Important Information\n'
-        '## Key Facts and Figures\n'
-        '## Risks or Open Questions (only when needed)\n\n'
-        'If context is insufficient, say that clearly.'
-    )
-
-
-def _build_document_chat_prompt() -> str:
-    return (
-        'You answer questions about one uploaded external document only. '
-        'Use only the provided context chunks and do not use company knowledge.\n\n'
-        'Response rules:\n'
-        '- Be concise and practical.\n'
-        '- Cite evidence inline with [n] references.\n'
-        '- If the answer is not in the document context, say that clearly.'
-    )
 
 
 def _event(event_name: str, data: dict) -> str:
@@ -132,9 +113,24 @@ def _build_document_detail(db: Session, document: SummarizerDocument) -> Summari
         error_text=document.error_text,
         summary_text=document.summary_text,
         summary_updated_at=document.summary_updated_at,
+        detected_language_code=document.detected_language_code,
         created_at=document.created_at,
         chunk_count=chunk_count,
         message_count=message_count,
+    )
+
+
+def _resolve_language(
+    db: Session,
+    document: SummarizerDocument,
+    payload: SummarizerSummarizeRequest | SummarizerAskRequest,
+):
+    document_language_code = ensure_document_language_code(db=db, document=document)
+    return resolve_response_language(
+        mode=payload.response_language_mode,
+        custom_response_language=payload.custom_response_language,
+        browser_language=payload.browser_language,
+        document_language_code=document_language_code,
     )
 
 
@@ -211,6 +207,7 @@ def delete_document(
 @router.post('/documents/{document_id}/summarize')
 def summarize_document(
     document_id: int,
+    payload: SummarizerSummarizeRequest,
     request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -218,11 +215,16 @@ def summarize_document(
     validate_csrf(request)
     enforce_chat_rate_limit(current_user.id)
     document = _get_owned_document(db, document_id, current_user)
+    resolved_language = _resolve_language(db, document, payload)
 
     if document.status != SummarizerDocumentStatus.ready:
-        raise HTTPException(status_code=400, detail='Document is not ready yet')
+        raise HTTPException(
+            status_code=400,
+            detail=get_localized_text('document_not_ready', resolved_language.code),
+        )
 
-    query = 'Summarize the most important information in this document.'
+    retrieval_language_code = document.detected_language_code or resolved_language.code
+    query = get_localized_text('summary_query', retrieval_language_code)
     chunks = search_summarizer_chunks(
         db=db,
         document_id=document.id,
@@ -230,13 +232,21 @@ def summarize_document(
         top_k=max(settings.retrieval_top_k, 12),
     )
     if not chunks:
-        raise HTTPException(status_code=400, detail='No indexed content available for summarization')
+        raise HTTPException(
+            status_code=400,
+            detail=get_localized_text('no_summary_content', resolved_language.code),
+        )
 
     provider = get_llm_provider(db)
     llm_messages = [{'role': 'user', 'content': query}]
-    summary_text = ''.join(provider.stream_chat(_build_summary_prompt(), llm_messages, chunks)).strip()
+    summary_text = ''.join(
+        provider.stream_chat(build_summary_prompt(resolved_language.label), llm_messages, chunks)
+    ).strip()
     if not summary_text:
-        raise HTTPException(status_code=500, detail='Summary generation failed')
+        raise HTTPException(
+            status_code=500,
+            detail=get_localized_text('summary_failed', resolved_language.code),
+        )
 
     document.summary_text = summary_text
     document.summary_updated_at = datetime.now(UTC)
@@ -276,8 +286,12 @@ def ask_document(
     question = payload.question.strip()
     if not question:
         raise HTTPException(status_code=400, detail='Question is required')
+    resolved_language = _resolve_language(db, document, payload)
     if document.status != SummarizerDocumentStatus.ready:
-        raise HTTPException(status_code=400, detail='Document is not ready yet')
+        raise HTTPException(
+            status_code=400,
+            detail=get_localized_text('document_not_ready', resolved_language.code),
+        )
 
     user_message = SummarizerMessage(document_id=document.id, role=ChatRole.user, content=question)
     db.add(user_message)
@@ -289,7 +303,7 @@ def ask_document(
         question=question,
     )
     _, _, low_confidence = retrieval_confidence(chunks)
-    warning = LOW_CONFIDENCE_WARNING if low_confidence and chunks else None
+    warning = get_localized_text('low_confidence_warning', resolved_language.code) if low_confidence and chunks else None
 
     history = (
         db.query(SummarizerMessage)
@@ -305,17 +319,16 @@ def ask_document(
         full_answer = ''
         try:
             if not chunks:
-                fallback = (
-                    'I cannot find enough relevant context in this uploaded document '
-                    'to answer your question confidently. Please ask a more specific question.'
-                )
+                fallback = get_localized_text('no_context_answer', resolved_language.code)
                 for token in fallback.split(' '):
                     part = token + ' '
                     full_answer += part
                     yield _event('token', {'text': part})
             else:
                 provider = get_llm_provider(db)
-                for token in provider.stream_chat(_build_document_chat_prompt(), llm_messages, chunks):
+                for token in provider.stream_chat(
+                    build_document_chat_prompt(resolved_language.label), llm_messages, chunks
+                ):
                     full_answer += token
                     yield _event('token', {'text': token})
 
@@ -341,6 +354,6 @@ def ask_document(
             )
         except Exception:
             db.rollback()
-            yield _event('error', {'message': 'Unable to complete summarizer chat request'})
+            yield _event('error', {'message': get_localized_text('chat_error', resolved_language.code)})
 
     return StreamingResponse(stream(), media_type='text/event-stream')

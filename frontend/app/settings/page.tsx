@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { api } from '@/lib/api';
+import { appReleaseTag } from '@/lib/app-version';
 import { getCurrentUser } from '@/lib/auth';
 import {
   Health,
@@ -1060,8 +1061,9 @@ export default function SettingsPage() {
               <p className='font-semibold text-amber-950'>Reinstall Recovery</p>
               <p className='mt-1'>
                 This Workspace ID is the license anchor for this installation. If you reinstall and want to reuse the
-                same Polar purchase, restore this exact value in <code>.env</code> as{' '}
-                <code>LICENSE_WORKSPACE_ID</code>, rebuild the API, and then activate with the same Polar key.
+                same Polar purchase, open the <code>.env</code> file in your install directory (typically{' '}
+                <code>&lt;install-dir&gt;/.env</code>), restore this exact value as <code>LICENSE_WORKSPACE_ID</code>,
+                run <code>docker compose up -d --build api</code>, and then activate with the same Polar key.
               </p>
               <p className='mt-1'>
                 A stored Polar license key does not automatically prove it matches the Workspace ID shown above. Old
@@ -1239,6 +1241,7 @@ export default function SettingsPage() {
         <h2 className='text-sm font-semibold'>Service Health</h2>
         {health ? (
           <div className='mt-3 space-y-1 text-sm text-slate-600'>
+            {canSaveProvider ? <p>App Version: {appReleaseTag}</p> : null}
             <p>Database: {health.db ? 'OK' : 'Down'}</p>
             <p>Redis: {health.redis ? 'OK' : 'Down'}</p>
             <p>LLM Provider: {health.provider.llm}</p>

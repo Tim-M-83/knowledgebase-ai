@@ -32,6 +32,7 @@ KnowledgeBase AI is a self-hosted internal knowledge platform that lets teams:
 - Private personal notes per user (create, edit, delete).
 - Dashboard KPIs, charts, and "knowledge gaps" analytics.
 - Runtime switching between OpenAI and Ollama providers (single-tenant runtime setting).
+- Admin-only app version display in `Settings > Service Health`, using the installed GitHub release tag format (for example `v0.1.5`).
 - Admin-only support diagnostics export with bounded recent API and worker logs.
 
 ### Taxonomy defaults and delete behavior
@@ -587,6 +588,7 @@ docker compose up -d --build api frontend
 8. If an admin reaches the device limit or loses the local activation ID after a reinstall, `Settings > License & Subscription` now shows activation usage and provides `Reset All Activations` as the v1 recovery path.
 9. The Quick Start installer now writes a non-empty `LICENSE_WORKSPACE_ID` into `.env` and prints it at the end of installation so admins can keep it for manual restore.
 10. Under the current strict-restore policy, a billing email that is already linked to an older Polar workspace should be reused only by restoring that original `LICENSE_WORKSPACE_ID`. Use a different billing email if you want to purchase a truly new workspace.
+11. For reinstall recovery, open the `.env` file inside the installation directory (typically `<install-dir>/.env`), update `LICENSE_WORKSPACE_ID`, then run `docker compose up -d --build api` before activating the same Polar key again.
 
 ### 7.8 Document lifecycle
 - `uploaded`: queued.
@@ -628,7 +630,7 @@ docker compose up -d --build api frontend
 - If activation is missing, use `Buy / Renew Subscription` on `app.automateki.de`, copy the Polar-generated license key from the hosted success page, paste it into Settings, then use `Activate This Installation`.
 - In Settings, license actions show an inline success/error banner directly inside `License & Subscription` so activation and validation results are visible immediately.
 - If the workspace has already consumed all activation slots, use `Reset All Activations` in Settings, then retry `Activate This Installation`.
-- If activation fails with `License key does not match this workspace.`, the stored Polar key belongs to a different `LICENSE_WORKSPACE_ID`. Restore the original Workspace ID in `.env`, rebuild the API, and retry activation. Otherwise start a new checkout for the new workspace.
+- If activation fails with `License key does not match this workspace.`, the stored Polar key belongs to a different `LICENSE_WORKSPACE_ID`. Open the `.env` file in the installation directory (typically `<install-dir>/.env`), restore the original Workspace ID there, rebuild the API, and retry activation. Otherwise start a new checkout for the new workspace.
 - If checkout is blocked because the billing email is already linked to another Workspace ID on Polar, restore the original `LICENSE_WORKSPACE_ID` for that purchase or save a different billing email before retrying checkout for a brand new workspace.
 - If checkout is blocked because the billing email is invalid, save a real reachable `Billing Email` directly in `Settings > License & Subscription` and retry `Buy / Renew Subscription`. Use `LICENSE_BILLING_EMAIL` in `.env` only as an operator fallback.
 

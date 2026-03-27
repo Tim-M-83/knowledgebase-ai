@@ -5,9 +5,30 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChatPanel } from '@/components/ChatPanel';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 import { useToast } from '@/components/ui/toast';
 import { api } from '@/lib/api';
-import { ChatDoneEvent, ChatMessage, SummarizerDocument, SummarizerMessage } from '@/lib/types';
+import {
+  ChatDoneEvent,
+  ChatMessage,
+  SummarizerDocument,
+  SummarizerMessage,
+  SummarizerResponseLanguageMode
+} from '@/lib/types';
+
+const LANGUAGE_MODE_STORAGE_KEY = 'kbai.summarizer.languageMode';
+const CUSTOM_LANGUAGE_STORAGE_KEY = 'kbai.summarizer.customLanguage';
+
+const LANGUAGE_LABELS: Record<string, string> = {
+  de: 'German',
+  en: 'English',
+  es: 'Spanish',
+  fr: 'French',
+  it: 'Italian',
+  nl: 'Dutch',
+  pt: 'Portuguese'
+};
 
 function parseSseBlock(block: string): { event: string; data: any } | null {
   const lines = block.split('\n').filter(Boolean);
@@ -37,11 +58,25 @@ function formatDate(value: string | null | undefined): string {
   }
 }
 
+function getBrowserLanguage(): string | undefined {
+  if (typeof navigator === 'undefined') return undefined;
+  return navigator.language || navigator.languages?.[0] || undefined;
+}
+
+function getLanguageLabel(code: string | null | undefined): string {
+  if (!code) return 'Not detected yet';
+  const normalized = code.toLowerCase();
+  const label = LANGUAGE_LABELS[normalized];
+  return label ? `${label} (${normalized})` : normalized;
+}
+
 export default function AIDocumentSummarizerPage() {
   const [documents, setDocuments] = useState<SummarizerDocument[]>([]);
   const [selectedDocumentId, setSelectedDocumentId] = useState<number | null>(null);
   const [messages, setMessages] = useState<SummarizerMessage[]>([]);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [responseLanguageMode, setResponseLanguageMode] = useState<SummarizerResponseLanguageMode>('auto');
+  const [customResponseLanguage, setCustomResponseLanguage] = useState('');
   const [uploading, setUploading] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
   const [chatLoading, setChatLoading] = useState(false);
@@ -60,6 +95,18 @@ export default function AIDocumentSummarizerPage() {
         session_id: message.document_id
       })),
     [messages]
+  );
+
+  const customLanguageRequired = responseLanguageMode === 'custom' && !customResponseLanguage.trim();
+
+  const languagePayload = useMemo(
+    () => ({
+      response_language_mode: responseLanguageMode,
+      custom_response_language:
+        responseLanguageMode === 'custom' ? customResponseLanguage.trim() || undefined : undefined,
+      browser_language: getBrowserLanguage()
+    }),
+    [customResponseLanguage, responseLanguageMode]
   );
 
   const loadDocuments = useCallback(
@@ -84,6 +131,28 @@ export default function AIDocumentSummarizerPage() {
     );
     setMessages(rows);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const storedMode = window.localStorage.getItem(LANGUAGE_MODE_STORAGE_KEY);
+    const storedCustomLanguage = window.localStorage.getItem(CUSTOM_LANGUAGE_STORAGE_KEY);
+    if (storedMode === 'auto' || storedMode === 'document' || storedMode === 'custom') {
+      setResponseLanguageMode(storedMode);
+    }
+    if (storedCustomLanguage) {
+      setCustomResponseLanguage(storedCustomLanguage);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(LANGUAGE_MODE_STORAGE_KEY, responseLanguageMode);
+    if (customResponseLanguage.trim()) {
+      window.localStorage.setItem(CUSTOM_LANGUAGE_STORAGE_KEY, customResponseLanguage.trim());
+    } else {
+      window.localStorage.removeItem(CUSTOM_LANGUAGE_STORAGE_KEY);
+    }
+  }, [customResponseLanguage, responseLanguageMode]);
 
   useEffect(() => {
     loadDocuments().catch((error) =>
@@ -159,12 +228,16 @@ export default function AIDocumentSummarizerPage() {
       toast('Document must be in "ready" status before summarization');
       return;
     }
+    if (customLanguageRequired) {
+      toast('Enter a custom response language first.');
+      return;
+    }
 
     setSummarizing(true);
     try {
       const result = await api.post<{ summary_text: string; summary_updated_at: string }>(
         `/ai-document-summarizer/documents/${selectedDocument.id}/summarize`,
-        {},
+        languagePayload,
         true
       );
       setDocuments((prev) =>
@@ -193,6 +266,10 @@ export default function AIDocumentSummarizerPage() {
     }
     if (selectedDocument.status !== 'ready') {
       toast('Document must be ready before chat is available');
+      return;
+    }
+    if (customLanguageRequired) {
+      toast('Enter a custom response language first.');
       return;
     }
 
@@ -228,7 +305,7 @@ export default function AIDocumentSummarizerPage() {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-          body: JSON.stringify({ question: text })
+          body: JSON.stringify({ question: text, ...languagePayload })
         }
       );
       if (!response.ok) {
@@ -382,20 +459,76 @@ export default function AIDocumentSummarizerPage() {
 
       <div className='space-y-3'>
         <Card>
-          <div className='flex flex-wrap items-center justify-between gap-2'>
-            <div>
-              <h2 className='text-sm font-semibold'>Document Summary</h2>
-              <p className='mt-1 text-xs text-slate-500'>
-                Generate a concise summary of the most important information.
-              </p>
+          <div className='space-y-3'>
+            <div className='flex flex-wrap items-center justify-between gap-2'>
+              <div>
+                <h2 className='text-sm font-semibold'>Document Summary</h2>
+                <p className='mt-1 text-xs text-slate-500'>
+                  Generate a concise summary of the most important information.
+                </p>
+              </div>
+              <Button
+                onClick={summarizeDocument}
+                disabled={
+                  !selectedDocument ||
+                  selectedDocument.status !== 'ready' ||
+                  summarizing ||
+                  customLanguageRequired
+                }
+                type='button'
+              >
+                {summarizing ? 'Summarizing...' : 'Summarize the most important information'}
+              </Button>
             </div>
-            <Button
-              onClick={summarizeDocument}
-              disabled={!selectedDocument || selectedDocument.status !== 'ready' || summarizing}
-              type='button'
-            >
-              {summarizing ? 'Summarizing...' : 'Summarize the most important information'}
-            </Button>
+
+            <div className='grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-[220px_1fr]'>
+              <div className='space-y-1'>
+                <label className='text-xs font-semibold uppercase tracking-wide text-slate-500'>
+                  Response Language
+                </label>
+                <Select
+                  value={responseLanguageMode}
+                  onChange={(event) =>
+                    setResponseLanguageMode(event.target.value as SummarizerResponseLanguageMode)
+                  }
+                >
+                  <option value='auto'>Auto (browser, then document, then English)</option>
+                  <option value='document'>Document language</option>
+                  <option value='custom'>Custom language</option>
+                </Select>
+              </div>
+              <div className='space-y-2 text-xs text-slate-500'>
+                {responseLanguageMode === 'custom' ? (
+                  <div className='space-y-1'>
+                    <label className='font-semibold uppercase tracking-wide text-slate-500'>
+                      Custom Language
+                    </label>
+                    <Input
+                      value={customResponseLanguage}
+                      onChange={(event) => setCustomResponseLanguage(event.target.value)}
+                      placeholder='Deutsch, English, Español, Français'
+                    />
+                  </div>
+                ) : null}
+                <p>
+                  This shared setting applies to both the one-click summary and the document chat.
+                  Auto uses your browser language first, then the detected document language, then
+                  English.
+                </p>
+                <p>
+                  Detected document language:{' '}
+                  <span className='font-medium text-slate-700'>
+                    {getLanguageLabel(selectedDocument?.detected_language_code)}
+                  </span>
+                </p>
+                {customLanguageRequired ? (
+                  <p className='text-amber-700'>
+                    Enter a custom response language before generating a summary or asking
+                    document-specific questions.
+                  </p>
+                ) : null}
+              </div>
+            </div>
           </div>
         </Card>
 

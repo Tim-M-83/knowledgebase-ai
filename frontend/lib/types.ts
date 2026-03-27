@@ -62,6 +62,7 @@ export type SummarizerDocument = {
   error_text?: string | null;
   summary_text?: string | null;
   summary_updated_at?: string | null;
+  detected_language_code?: string | null;
   created_at: string;
 };
 
@@ -72,6 +73,8 @@ export type SummarizerMessage = {
   content: string;
   created_at: string;
 };
+
+export type SummarizerResponseLanguageMode = 'auto' | 'document' | 'custom';
 
 export type FolderItem = {
   id: number;

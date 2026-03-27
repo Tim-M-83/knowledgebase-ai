@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.models.summarizer import SummarizerChunk, SummarizerDocument, SummarizerDocumentStatus
 from app.services.chunking import RawSegment, chunk_segments
 from app.services.embeddings import get_embeddings_provider
+from app.services.summarizer_language import detect_language_code_from_texts
 from app.utils.file_storage import load_file_path
 from app.utils.text_cleaning import normalize_whitespace
 
@@ -122,6 +123,7 @@ def ingest_summarizer_document(db: Session, document_id: int) -> dict[str, Any]:
         segments = extract_summarizer_segments(document)
         if not segments:
             raise ValueError('No text could be extracted from this document')
+        document.detected_language_code = detect_language_code_from_texts([segment.text for segment in segments])
 
         chunks = chunk_segments(segments)
         embeddings = provider.embed_batch([chunk.content for chunk in chunks])
