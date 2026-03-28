@@ -1,6 +1,7 @@
 # KnowledgeBase AI
 
 Production-ready MVP for a self-hosted internal knowledge base with AI instant answers and source citations.
+For more information and the quick-start installation guide, visit our website: https://knowledgebaseai.de/
 
 ## Full Documentation
 For complete application documentation (architecture, all UI functions, API reference, RBAC, config, operations, and troubleshooting), see:
