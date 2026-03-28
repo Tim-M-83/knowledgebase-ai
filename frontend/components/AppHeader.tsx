@@ -53,14 +53,14 @@ export function AppHeader() {
     }
     const base = [
       { href: '/dashboard', label: 'Dashboard' },
-      { href: '/documents', label: 'Documents' },
-      { href: '/ai-document-summarizer', label: 'AI Document Summarizer' },
       { href: '/chat', label: 'Chat' },
+      { href: '/ai-document-summarizer', label: 'AI Document Summarizer' },
       { href: '/personal-notes', label: 'Personal Notes' },
     ];
     if (emailHelperEnabled) {
       base.push({ href: '/email-helper', label: 'Email Helper' });
     }
+    base.push({ href: '/documents', label: 'Documents' });
     base.push({ href: '/admin/users', label: 'Admin' });
     base.push({ href: '/settings', label: 'Settings' });
     return base;
